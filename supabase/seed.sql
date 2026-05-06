@@ -35,6 +35,13 @@ INSERT INTO advisors (name, initial, email)
 VALUES ('Dr. Y', 'DY', 'dr.y@diu.edu.bd')
 ON CONFLICT (email) DO NOTHING;
 
+-- 4b. Set up Authorized Staff (Security layer)
+-- Add yourself or test emails here to gain access
+INSERT INTO authorized_staff (email, role, name)
+VALUES ('dr.y@diu.edu.bd', 'advisor', 'Dr. Y'),
+       ('prof.x@diu.edu.bd', 'advisor', 'Prof. X')
+ON CONFLICT (email) DO NOTHING;
+
 -- 5. Set up Advisor Ranges
 -- Dr. Y handles IDs ending in 001-060 for 241-15 batch
 INSERT INTO student_advisor_ranges (advisor_id, semester_id, start_id, end_id)

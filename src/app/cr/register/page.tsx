@@ -1,294 +1,151 @@
-"use client";
+'use client'
 
-import { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase";
-import { normalizeStudentId } from "@/lib/advisor-assignment";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { toast } from "sonner";
-import { Loader2, UserCheck, ShieldAlert } from "lucide-react";
-
-interface Section {
-    id: string;
-    name: string;
-    current_count: number;
-    capacity: number;
-}
-
-interface Advisor {
-    id: string;
-    name: string;
-    initial: string;
-}
+import { useState, useEffect } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import { useRouter } from 'next/navigation'
+import { User, IdentificationCard, Plus, CheckCircle, Clock } from 'lucide-react'
 
 export default function CRRegisterPage() {
-    const [loading, setLoading] = useState(false);
-    const [fetchingAdvisor, setFetchingAdvisor] = useState(false);
+  const [loading, setLoading] = useState(false)
+  const [existingApp, setExistingApp] = useState<any>(null)
+  const [formData, setFormData] = useState({
+    full_name: '',
+    student_id: '',
+    section_interested: ''
+  })
+  const supabase = createClient()
+  const router = useRouter()
 
-    // Form State
-    const [studentId, setStudentId] = useState("");
-    const [studentName, setStudentName] = useState("");
-    const [sectionId, setSectionId] = useState("");
-    const [labId, setLabId] = useState("");
-    const [assignedAdvisor, setAssignedAdvisor] = useState<Advisor | null>(null);
-    const [sections, setSections] = useState<Section[]>([]);
-    const [labs, setLabs] = useState<any[]>([]);
+  useEffect(() => {
+    async function checkExisting() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        // router.push('/auth/login') // Removing redirect to allow user to see the form if they want, but handleSubmit will check
+        return
+      }
 
-    // 1. Load Sections on Mount
-    useEffect(() => {
-        async function loadData() {
-            // Get sections for current active semester
-            const { data: semesterData } = await supabase
-                .from("semesters")
-                .select("id")
-                .eq("is_active", true)
-                .single();
+      const { data } = await supabase
+        .from('cr_applications')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle()
+      
+      if (data) setExistingApp(data)
+    }
+    checkExisting()
+  }, [])
 
-            if (semesterData) {
-                const { data: sectionData } = await supabase
-                    .from("sections")
-                    .select("id, name, capacity")
-                    .eq("semester_id", semesterData.id);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
 
-                if (sectionData) {
-                    // Count current registrations per section
-                    const { data: regCounts } = await supabase
-                        .from("registrations")
-                        .select("section_id");
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      alert("Please login with your university email first.")
+      setLoading(false)
+      return
+    }
 
-                    const formattedSections = sectionData.map(s => ({
-                        id: s.id,
-                        name: s.name,
-                        capacity: s.capacity,
-                        current_count: regCounts?.filter(r => r.section_id === s.id).length || 0
-                    }));
+    const { error } = await supabase.from('cr_applications').insert({
+      user_id: user.id,
+      full_name: formData.full_name,
+      student_id: formData.student_id,
+      email: user.email,
+      section_interested: formData.section_interested,
+      status: 'pending'
+    })
 
-                    setSections(formattedSections);
-                }
-            }
-        }
-        loadData();
-    }, []);
+    if (error) {
+      alert(error.message)
+    } else {
+      window.location.reload()
+    }
+    setLoading(false)
+  }
 
-    // 2. Auto-lookup Advisor when Student ID changes
-    useEffect(() => {
-        async function lookupAdvisor() {
-            if (studentId.length < 8) {
-                setAssignedAdvisor(null);
-                return;
-            }
-
-            setFetchingAdvisor(true);
-            const normalized = normalizeStudentId(studentId);
-
-            // Query ranges using numeric comparison
-            const numericId = parseInt(normalized);
-            if (isNaN(numericId)) {
-                setAssignedAdvisor(null);
-                setFetchingAdvisor(false);
-                return;
-            }
-
-            const { data: rangeData } = await supabase
-                .from("student_advisor_ranges")
-                .select(`
-                  advisor_id,
-                  advisors (id, name, initial)
-                `)
-                .lte("start_id_numeric", numericId)
-                .gte("end_id_numeric", numericId)
-                .order('created_at', { ascending: false })
-                .limit(1);
-
-            if (rangeData && rangeData.length > 0) {
-                const advisor = rangeData[0].advisors as any;
-                setAssignedAdvisor({
-                    id: advisor.id,
-                    name: advisor.name,
-                    initial: advisor.initial
-                });
-            } else {
-                setAssignedAdvisor(null);
-            }
-            setFetchingAdvisor(false);
-        }
-
-        const timer = setTimeout(lookupAdvisor, 500);
-        return () => clearTimeout(timer);
-    }, [studentId]);
-
-    // 3. Load Labs when Section changes
-    useEffect(() => {
-        async function loadLabs() {
-            if (!sectionId) {
-                setLabs([]);
-                return;
-            }
-            const { data } = await supabase
-                .from("lab_groups")
-                .select("*")
-                .eq("section_id", sectionId);
-            if (data) setLabs(data);
-        }
-        loadLabs();
-    }, [sectionId]);
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setLoading(true);
-
-        try {
-            const { data: { user } } = await supabase.auth.getUser();
-
-            const { error } = await supabase.from("registrations").insert({
-                student_id: studentId,
-                student_name: studentName,
-                section_id: sectionId,
-                lab_group_id: labId || null,
-                advisor_id: assignedAdvisor?.id || null,
-                entered_by: user?.id,
-                note: ""
-            });
-
-            if (error) {
-                if (error.code === '23505') throw new Error("This Student ID is already registered.");
-                throw error;
-            }
-
-            toast.success("Student registered successfully!");
-            // Reset form
-            setStudentId("");
-            setStudentName("");
-            setSectionId("");
-            setLabId("");
-            setAssignedAdvisor(null);
-        } catch (err: any) {
-            toast.error(err.message);
-        } finally {
-            setLoading(false);
-        }
-    };
-
+  if (existingApp) {
     return (
-        <div className="max-w-4xl mx-auto py-10 px-6">
-            <Card className="shadow-xl border-none">
-                <CardHeader className="bg-primary text-white rounded-t-xl">
-                    <CardTitle className="text-2xl flex items-center gap-2">
-                        <UserCheck className="w-6 h-6" /> Class Representative Portal
-                    </CardTitle>
-                    <CardDescription className="text-primary-foreground/80">
-                        Advisory Pre-Registration Form
-                    </CardDescription>
-                </CardHeader>
-
-                <form onSubmit={handleSubmit}>
-                    <CardContent className="space-y-6 pt-8">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {/* Student ID */}
-                            <div className="space-y-2">
-                                <Label htmlFor="studentId">Student ID</Label>
-                                <div className="relative">
-                                    <Input
-                                        id="studentId"
-                                        placeholder="e.g. 231-15-123"
-                                        value={studentId}
-                                        onChange={(e) => setStudentId(e.target.value)}
-                                        required
-                                        className="pr-10"
-                                    />
-                                    {fetchingAdvisor && (
-                                        <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin w-4 h-4 text-slate-400" />
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Student Name */}
-                            <div className="space-y-2">
-                                <Label htmlFor="studentName">Full Name</Label>
-                                <Input
-                                    id="studentName"
-                                    placeholder="Student's Full Name"
-                                    value={studentName}
-                                    onChange={(e) => setStudentName(e.target.value)}
-                                    required
-                                />
-                            </div>
-                        </div>
-
-                        {/* Advisor Auto-Display */}
-                        <div className={`p-4 rounded-lg flex items-center justify-between transition-colors ${assignedAdvisor ? 'bg-green-50 border border-green-200' : 'bg-slate-50 border border-slate-200'}`}>
-                            <div className="flex items-center gap-3">
-                                <ShieldAlert className={`w-5 h-5 ${assignedAdvisor ? 'text-green-600' : 'text-slate-400'}`} />
-                                <div>
-                                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Assigned Advisor (Auto-detected)</p>
-                                    <p className="font-bold text-slate-900">
-                                        {assignedAdvisor ? `${assignedAdvisor.name} (${assignedAdvisor.initial})` : "Please enter a valid Student ID"}
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
-                            {/* Section Select */}
-                            <div className="space-y-2">
-                                <Label>Preferred Theory Section</Label>
-                                <Select value={sectionId} onValueChange={setSectionId} required>
-                                    <SelectTrigger className="h-12">
-                                        <SelectValue placeholder="Select Theory Section" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {sections.map(s => {
-                                            const isFull = s.current_count >= s.capacity;
-                                            return (
-                                                <SelectItem key={s.id} value={s.id} disabled={isFull}>
-                                                    <div className="flex justify-between w-[250px]">
-                                                        <span>Section {s.name}</span>
-                                                        <span className={`text-xs ${isFull ? 'text-red-500 font-bold' : 'text-slate-400'}`}>
-                                                            {s.current_count}/{s.capacity} seats
-                                                        </span>
-                                                    </div>
-                                                </SelectItem>
-                                            );
-                                        })}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            {/* Lab Group Select */}
-                            <div className="space-y-2">
-                                <Label>Preferred Lab Group (Optional)</Label>
-                                <Select value={labId} onValueChange={setLabId}>
-                                    <SelectTrigger className="h-12">
-                                        <SelectValue placeholder="Select Lab (Optional)" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {labs.map(l => (
-                                            <SelectItem key={l.id} value={l.id}>
-                                                Group {l.name}
-                                            </SelectItem>
-                                        ))}
-                                        {labs.length === 0 && <SelectItem value="none" disabled>No labs for this section</SelectItem>}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
-                    </CardContent>
-
-                    <CardFooter className="bg-slate-50 rounded-b-xl py-6 flex justify-between border-t mt-6">
-                        <p className="text-xs text-slate-500 max-w-[250px]">
-                            Confirming this registration will occupy one seat in the selected section.
-                        </p>
-                        <Button type="submit" className="h-12 px-8 gap-2" disabled={loading || !assignedAdvisor}>
-                            {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-                            Complete Registration
-                        </Button>
-                    </CardFooter>
-                </form>
-            </Card>
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
+        <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-xl text-center">
+          <div className="mx-auto w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-4">
+            {existingApp.status === 'pending' ? <Clock className="w-8 h-8" /> : <CheckCircle className="w-8 h-8" />}
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Application {existingApp.status}</h2>
+          <p className="text-gray-600 mb-6">
+            Your application to become a CR for <strong>{existingApp.section_interested}</strong> is currently {existingApp.status}.
+            {existingApp.status === 'pending' && " We'll notify you once an admin reviews it."}
+          </p>
+          <button 
+            onClick={() => router.push('/')}
+            className="w-full bg-gray-900 text-white py-3 rounded-lg font-semibold hover:bg-gray-800 transition-colors"
+          >
+            Back to Home
+          </button>
         </div>
-    );
-}
+      </div>
+    )
+  }
 
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
+      <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-xl">
+        <div className="mb-8">
+          <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Become a CR</h1>
+          <p className="text-gray-500 mt-2">Submit your request to manage section seats.</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-2">
+            <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+              <User className="w-4 h-4" /> Full Name
+            </label>
+            <input 
+              required
+              type="text"
+              placeholder="e.g. Tamzid Rahman"
+              className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+              value={formData.full_name}
+              onChange={(e) => setFormData({...formData, full_name: e.target.value})}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+              <IdentificationCard className="w-4 h-4" /> Student ID
+            </label>
+            <input 
+              required
+              type="text"
+              placeholder="241-15-XXXX"
+              className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+              value={formData.student_id}
+              onChange={(e) => setFormData({...formData, student_id: e.target.value})}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+              <Plus className="w-4 h-4" /> Section to Manage
+            </label>
+            <input 
+              required
+              type="text"
+              placeholder="e.g. 59_A"
+              className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+              value={formData.section_interested}
+              onChange={(e) => setFormData({...formData, section_interested: e.target.value})}
+            />
+          </div>
+
+          <button 
+            type="submit"
+            disabled={loading}
+            className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition-all flex items-center justify-center gap-2 disabled:bg-blue-300 shadow-lg shadow-blue-100"
+          >
+            {loading ? 'Submitting...' : 'Submit Request'}
+          </button>
+        </form>
+      </div>
+    </div>
+  )
+}
