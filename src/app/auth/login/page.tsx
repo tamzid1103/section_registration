@@ -5,50 +5,64 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { allowedDomains, developerAllowlist } from "@/lib/auth-constants";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { InfoIcon, Mail, KeyRound, User } from "lucide-react";
+import {
+    Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle,
+} from "@/components/ui/card";
+import { InfoIcon, KeyRound, User, GraduationCap, Shield } from "lucide-react";
+
+type Mode = "login" | "register";
+type RegisterRole = "cr" | "advisor";
 
 export default function LoginPage() {
+    const [mode, setMode] = useState<Mode>("login");
+    const [registerRole, setRegisterRole] = useState<RegisterRole>("cr");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [isRegister, setIsRegister] = useState(false);
+
+    // shared fields
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [fullName, setFullName] = useState("");
-    const [employeeId, setEmployeeId] = useState("");
+
+    // CR-only fields
+    const [studentId, setStudentId] = useState("");
     const [sectionInterested, setSectionInterested] = useState("");
+
     const router = useRouter();
 
-    const isDeveloperEmail = (value: string) => developerAllowlist.includes(value.toLowerCase());
-    const isAllowedDomain = (value: string) => {
-        const domain = value.split("@")[1] || "";
-        return allowedDomains.includes(domain.toLowerCase());
+    const isDeveloper = (e: string) => developerAllowlist.includes(e.trim().toLowerCase());
+    const isAllowedDomain = (e: string) => {
+        const domain = e.split("@")[1]?.toLowerCase() || "";
+        return allowedDomains.includes(domain);
     };
 
-    const resolvePostLogin = async (userEmail: string) => {
-        const { data: staffRecord } = await supabase
+    // After login, determine where to redirect based on role in authorized_staff
+    const redirectByRole = async (userEmail: string) => {
+        const { data } = await supabase
             .from("authorized_staff")
             .select("role")
             .eq("email", userEmail)
             .single();
 
-        if (staffRecord?.role === "developer") return router.push("/developer");
-        if (staffRecord?.role === "admin") return router.push("/admin");
-        if (staffRecord?.role === "advisor") return router.push("/advisor");
-        if (staffRecord?.role === "cr") return router.push("/cr/manage");
+        if (data?.role === "developer") return router.push("/developer");
+        if (data?.role === "admin")     return router.push("/admin");
+        if (data?.role === "advisor")   return router.push("/advisor");
+        if (data?.role === "cr")        return router.push("/cr/manage");
 
+        // Check if pending CR application
         const { data: pending } = await supabase
             .from("cr_applications")
-            .select("id, status")
+            .select("id")
             .eq("email", userEmail)
             .eq("status", "pending")
             .maybeSingle();
 
-        if (pending) return router.push("/auth/pending");
+        if (pending) return router.push("/auth/pending?type=cr");
         return router.push("/auth/unauthorized");
     };
 
+    // ── LOGIN ──────────────────────────────────────────────────────────────────
     const handleLogin = async () => {
         setLoading(true);
         setError(null);
@@ -60,27 +74,28 @@ export default function LoginPage() {
             return;
         }
 
-        if (!isAllowedDomain(trimmedEmail) && !isDeveloperEmail(trimmedEmail)) {
-            setError("Only DIU emails can login, except for fixed developer emails.");
+        if (!isAllowedDomain(trimmedEmail) && !isDeveloper(trimmedEmail)) {
+            setError("Only DIU university emails are allowed to login.");
             setLoading(false);
             return;
         }
 
-        const { error } = await supabase.auth.signInWithPassword({
+        const { error: authErr } = await supabase.auth.signInWithPassword({
             email: trimmedEmail,
             password,
         });
 
-        if (error) {
-            setError(error.message);
+        if (authErr) {
+            setError(authErr.message);
             setLoading(false);
             return;
         }
 
-        await resolvePostLogin(trimmedEmail);
+        await redirectByRole(trimmedEmail);
         setLoading(false);
     };
 
+    // ── REGISTER ───────────────────────────────────────────────────────────────
     const handleRegister = async () => {
         setLoading(true);
         setError(null);
@@ -92,79 +107,184 @@ export default function LoginPage() {
             return;
         }
 
-        const isDev = isDeveloperEmail(trimmedEmail);
-        if (!isAllowedDomain(trimmedEmail) && !isDev) {
-            setError("Only DIU emails can register, except for fixed developer emails.");
+        // Developers cannot self-register — they are pre-seeded
+        if (isDeveloper(trimmedEmail)) {
+            setError("Developer accounts cannot be self-registered. Use the login form.");
             setLoading(false);
             return;
         }
 
-        const { data, error } = await supabase.auth.signUp({
+        if (!isAllowedDomain(trimmedEmail)) {
+            setError("Only DIU university emails (@diu.edu.bd or @daffodilvarsity.edu.bd) can register.");
+            setLoading(false);
+            return;
+        }
+
+        if (registerRole === "cr") {
+            if (!studentId || !sectionInterested) {
+                setError("Student ID and section are required for CR registration.");
+                setLoading(false);
+                return;
+            }
+        }
+
+        // Create auth account
+        const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
             email: trimmedEmail,
             password,
         });
 
-        if (error) {
-            setError(error.message);
+        if (signUpErr) {
+            setError(signUpErr.message);
             setLoading(false);
             return;
         }
 
-        if (isDev) {
-            if (!employeeId) {
-                setError("Employee ID is required for developers.");
+        const userId = signUpData.user?.id;
+
+        if (registerRole === "cr") {
+            // Insert CR application (status = pending, admin must approve)
+            const { error: appErr } = await supabase.from("cr_applications").insert({
+                user_id: userId,
+                full_name: fullName,
+                student_id: studentId,
+                email: trimmedEmail,
+                section_interested: sectionInterested,
+                status: "pending",
+                applied_at: new Date().toISOString(),
+            });
+
+            if (appErr) {
+                setError(appErr.message);
                 setLoading(false);
                 return;
             }
 
-            await supabase.from("authorized_staff").upsert({
+            router.push("/auth/pending?type=cr");
+
+        } else {
+            // ADVISOR: check if email exists in admin-managed advisor list
+            const { data: advisorRecord, error: advisorCheckErr } = await supabase
+                .from("advisors")
+                .select("id, name")
+                .eq("email", trimmedEmail)
+                .maybeSingle();
+
+            if (advisorCheckErr || !advisorRecord) {
+                setError(
+                    "Your email is not registered in the advisor list. " +
+                    "Please contact the admin to add your email to the system first."
+                );
+                setLoading(false);
+                return;
+            }
+
+            // Auto-approve: insert into authorized_staff as advisor
+            const { error: staffErr } = await supabase.from("authorized_staff").insert({
                 email: trimmedEmail,
-                role: "developer",
+                role: "advisor",
                 name: fullName,
-            }, { onConflict: "email" });
+            });
 
-            await resolvePostLogin(trimmedEmail);
-            setLoading(false);
-            return;
+            if (staffErr && !staffErr.message.includes("duplicate")) {
+                setError("Account created but could not assign advisor role: " + staffErr.message);
+                setLoading(false);
+                return;
+            }
+
+            // Sign them in immediately
+            const { error: signInErr } = await supabase.auth.signInWithPassword({
+                email: trimmedEmail,
+                password,
+            });
+
+            if (signInErr) {
+                // Account created but sign-in failed (email confirmation may be on)
+                setError("Account created. Please check your email to confirm, then login.");
+                setLoading(false);
+                return;
+            }
+
+            router.push("/advisor");
         }
 
-        if (!employeeId || !sectionInterested) {
-            setError("Student ID and Section are required for CR registration.");
-            setLoading(false);
-            return;
-        }
-
-        await supabase.from("cr_applications").insert({
-            user_id: data.user?.id,
-            full_name: fullName,
-            student_id: employeeId,
-            email: trimmedEmail,
-            section_interested: sectionInterested,
-            status: "pending",
-            applied_at: new Date().toISOString(),
-        });
-
-        router.push("/auth/pending");
         setLoading(false);
     };
 
+    const toggleMode = () => {
+        setMode(mode === "login" ? "register" : "login");
+        setError(null);
+    };
+
     return (
-        <div className="flex items-center justify-center min-h-screen bg-slate-50 p-4">
-            <Card className="w-full max-w-md shadow-xl border-t-4 border-primary">
-                <CardHeader className="text-center">
-                    <CardTitle className="text-2xl font-bold tracking-tight">Staff Portal Access</CardTitle>
+        <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-100 to-blue-50 p-4">
+            <Card className="w-full max-w-md shadow-2xl border-t-4 border-blue-600">
+                <CardHeader className="text-center pb-2">
+                    <div className="mx-auto mb-3 w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center">
+                        <GraduationCap className="w-7 h-7 text-white" />
+                    </div>
+                    <CardTitle className="text-2xl font-bold tracking-tight">
+                        {mode === "login" ? "Portal Login" : "Create Account"}
+                    </CardTitle>
                     <CardDescription>
-                        Register or login with email and password. Students do not need an account.
+                        {mode === "login"
+                            ? "Login with your university email"
+                            : "Register as a CR or Advisor using your DIU email"}
                     </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
+
+                <CardContent className="space-y-4 pt-4">
                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex gap-3 text-blue-800 text-sm">
-                        <InfoIcon className="w-5 h-5 flex-shrink-0" />
-                        <p>Use your DIU email to continue</p>
+                        <InfoIcon className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                        <p>Students do not need an account — use the search on the home page.</p>
                     </div>
 
-                    {isRegister && (
-                        <div className="space-y-3">
+                    {/* Role selector (register mode only) */}
+                    {mode === "register" && (
+                        <div className="grid grid-cols-2 gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setRegisterRole("cr")}
+                                className={`flex flex-col items-center gap-1 p-3 rounded-xl border-2 text-sm font-semibold transition-all ${
+                                    registerRole === "cr"
+                                        ? "border-blue-600 bg-blue-50 text-blue-700"
+                                        : "border-slate-200 text-slate-500 hover:border-slate-300"
+                                }`}
+                            >
+                                <Shield className="w-5 h-5" />
+                                Apply as CR
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setRegisterRole("advisor")}
+                                className={`flex flex-col items-center gap-1 p-3 rounded-xl border-2 text-sm font-semibold transition-all ${
+                                    registerRole === "advisor"
+                                        ? "border-blue-600 bg-blue-50 text-blue-700"
+                                        : "border-slate-200 text-slate-500 hover:border-slate-300"
+                                }`}
+                            >
+                                <User className="w-5 h-5" />
+                                Register as Advisor
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Role info banner */}
+                    {mode === "register" && (
+                        <div className={`text-xs rounded-lg p-3 border ${
+                            registerRole === "cr"
+                                ? "bg-amber-50 border-amber-200 text-amber-800"
+                                : "bg-green-50 border-green-200 text-green-800"
+                        }`}>
+                            {registerRole === "cr"
+                                ? "CR applications require admin approval before access is granted."
+                                : "Advisor accounts are auto-approved if your email is registered in the system."}
+                        </div>
+                    )}
+
+                    {/* Full Name (register only) */}
+                    {mode === "register" && (
+                        <div className="space-y-1.5">
                             <label className="text-sm font-medium">Full Name</label>
                             <Input
                                 placeholder="Your full name"
@@ -174,41 +294,19 @@ export default function LoginPage() {
                         </div>
                     )}
 
-                    {isRegister && (
-                        <div className="space-y-3">
-                            <label className="text-sm font-medium">
-                                {isDeveloperEmail(email.trim().toLowerCase()) ? "Employee ID (required)" : "Student ID (required)"}
-                            </label>
-                            <Input
-                                placeholder={isDeveloperEmail(email.trim().toLowerCase()) ? "EMP-XXXX" : "241-15-877"}
-                                value={employeeId}
-                                onChange={(e) => setEmployeeId(e.target.value)}
-                            />
-                        </div>
-                    )}
-
-                    {isRegister && !isDeveloperEmail(email.trim().toLowerCase()) && (
-                        <div className="space-y-3">
-                            <label className="text-sm font-medium">Section Interested (required)</label>
-                            <Input
-                                placeholder="Section A"
-                                value={sectionInterested}
-                                onChange={(e) => setSectionInterested(e.target.value)}
-                            />
-                        </div>
-                    )}
-
-                    <div className="space-y-3">
+                    {/* Email */}
+                    <div className="space-y-1.5">
                         <label className="text-sm font-medium">Email</label>
                         <Input
                             type="email"
-                            placeholder="name@diu.edu.bd"
+                            placeholder={mode === "register" ? "name@diu.edu.bd" : "Enter your email"}
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                         />
                     </div>
 
-                    <div className="space-y-3">
+                    {/* Password */}
+                    <div className="space-y-1.5">
                         <label className="text-sm font-medium">Password</label>
                         <Input
                             type="password"
@@ -218,27 +316,59 @@ export default function LoginPage() {
                         />
                     </div>
 
-                    <Button
-                        className="w-full h-12 gap-2 text-base"
-                        onClick={isRegister ? handleRegister : handleLogin}
-                        disabled={loading}
-                    >
-                        {isRegister ? <User className="w-5 h-5" /> : <KeyRound className="w-5 h-5" />}
-                        {loading ? "Processing..." : isRegister ? "Create Account" : "Login"}
-                    </Button>
+                    {/* CR extra fields */}
+                    {mode === "register" && registerRole === "cr" && (
+                        <>
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">Your Student ID</label>
+                                <Input
+                                    placeholder="241-15-877"
+                                    value={studentId}
+                                    onChange={(e) => setStudentId(e.target.value)}
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">Section You Want to Manage</label>
+                                <Input
+                                    placeholder="e.g. 66_A"
+                                    value={sectionInterested}
+                                    onChange={(e) => setSectionInterested(e.target.value)}
+                                />
+                            </div>
+                        </>
+                    )}
 
                     {error && (
-                        <p className="text-sm text-red-600 font-medium text-center">{error}</p>
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                            <p className="text-sm text-red-700 font-medium">{error}</p>
+                        </div>
                     )}
-                </CardContent>
-                <CardFooter className="flex flex-col gap-2 text-center text-xs text-muted-foreground border-t bg-slate-50/50 pt-4 rounded-b-lg">
-                    <button
-                        className="text-blue-600 hover:underline"
-                        onClick={() => setIsRegister(!isRegister)}
+
+                    <Button
+                        className="w-full h-11 gap-2 text-base"
+                        onClick={mode === "login" ? handleLogin : handleRegister}
+                        disabled={loading}
                     >
-                        {isRegister ? "Already have an account? Login" : "Don\'t have an account? Register"}
+                        {loading
+                            ? "Processing..."
+                            : mode === "login"
+                                ? <><KeyRound className="w-4 h-4" /> Login</>
+                                : <><User className="w-4 h-4" /> Create Account</>
+                        }
+                    </Button>
+                </CardContent>
+
+                <CardFooter className="flex flex-col gap-2 text-center text-xs text-muted-foreground border-t pt-4">
+                    <button
+                        type="button"
+                        className="text-blue-600 hover:underline text-sm"
+                        onClick={toggleMode}
+                    >
+                        {mode === "login"
+                            ? "Don't have an account? Register here"
+                            : "Already have an account? Login"}
                     </button>
-                    <p>Students do not need to login to use the Search Hub.</p>
+                    <p className="text-slate-400">Students search on the home page — no login needed.</p>
                 </CardFooter>
             </Card>
         </div>

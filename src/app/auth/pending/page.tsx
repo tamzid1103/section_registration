@@ -1,21 +1,43 @@
 import Link from "next/link"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Clock, Home } from "lucide-react"
 
-export default function PendingApprovalPage() {
+export default function PendingApprovalPage({
+    searchParams,
+}: {
+    searchParams: { type?: string }
+}) {
+    const type = searchParams?.type || "cr"
+
     return (
-        <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
-            <Card className="w-full max-w-lg">
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-100 to-amber-50 p-6">
+            <Card className="w-full max-w-md shadow-xl border-t-4 border-amber-400">
                 <CardHeader className="text-center">
-                    <CardTitle className="text-2xl font-bold">Request Submitted</CardTitle>
-                    <CardDescription>Your CR request is pending admin approval.</CardDescription>
+                    <div className="mx-auto w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mb-4">
+                        <Clock className="w-8 h-8 text-amber-600" />
+                    </div>
+                    <CardTitle className="text-2xl font-bold">Application Pending</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4 text-center">
-                    <p className="text-sm text-muted-foreground">
-                        You will gain access to the CR portal after an admin approves your request.
+                    <p className="text-muted-foreground">
+                        {type === "cr"
+                            ? "Your CR application has been submitted and is awaiting admin approval. You will be able to access the CR portal once approved."
+                            : "Your advisor application is pending. Please check with the admin."}
                     </p>
-                    <Button asChild className="w-full">
-                        <Link href="/">Back to Home</Link>
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
+                        <strong>What happens next?</strong>
+                        <p className="mt-1">
+                            {type === "cr"
+                                ? "An admin will review your application. Once approved, login again to access the CR portal."
+                                : "Contact admin if you believe your email should be registered."}
+                        </p>
+                    </div>
+                    <Button asChild className="w-full gap-2">
+                        <Link href="/"><Home className="w-4 h-4" /> Back to Home</Link>
+                    </Button>
+                    <Button variant="outline" asChild className="w-full">
+                        <Link href="/auth/login">Try Logging In</Link>
                     </Button>
                 </CardContent>
             </Card>
