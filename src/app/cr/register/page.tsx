@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import { User, IdentificationCard, Plus, CheckCircle, Clock } from 'lucide-react'
+import { User, CreditCard, Plus, CheckCircle, Clock } from 'lucide-react'
 
 export default function CRRegisterPage() {
   const [loading, setLoading] = useState(false)
@@ -111,7 +111,7 @@ export default function CRRegisterPage() {
 
           <div className="space-y-2">
             <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-              <IdentificationCard className="w-4 h-4" /> Student ID
+              <CreditCard className="w-4 h-4" /> Student ID
             </label>
             <input 
               required

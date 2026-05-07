@@ -2,115 +2,120 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+    Card, CardContent, CardHeader, CardTitle, CardDescription,
+} from "@/components/ui/card";
+import {
+    Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Users, UserCheck, Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Users, Search, CheckCircle2, Circle, LogOut } from "lucide-react";
+import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
-interface Registration {
+interface Student {
     id: string;
     student_id: string;
     student_name: string;
     section_name: string;
     lab_group_name: string;
+    advisor_completed: boolean;
     created_at: string;
-}
-
-interface AdvisorInfo {
-    name: string;
-    initial: string;
-    ranges: {
-        start_id: string;
-        end_id: string;
-    }[];
 }
 
 export default function AdvisorDashboard() {
     const [loading, setLoading] = useState(true);
-    const [registrations, setRegistrations] = useState<Registration[]>([]);
-    const [advisorInfo, setAdvisorInfo] = useState<AdvisorInfo | null>(null);
+    const [students, setStudents] = useState<Student[]>([]);
+    const [advisorInfo, setAdvisorInfo] = useState<{ name: string; ranges: any[] } | null>(null);
     const [searchQuery, setSearchQuery] = useState("");
+    const [toggling, setToggling] = useState<string | null>(null);
+    const router = useRouter();
 
     useEffect(() => {
-        async function fetchAdvisorData() {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) return;
+        fetchAdvisorData();
+    }, []);
 
-            // 1. Get Advisor details and their assigned ranges
-            const { data: advisorData, error: advisorError } = await supabase
-                .from("advisors")
-                .select(`
-                    id, 
-                    name, 
-                    initial,
-                    student_advisor_ranges (
-                        start_id,
-                        end_id,
-                        start_id_numeric,
-                        end_id_numeric
-                    )
-                `)
-                .eq("email", user.email)
-                .single();
+    async function fetchAdvisorData() {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
 
-            if (advisorError || !advisorData) {
-                setLoading(false);
-                return;
-            }
+        const { data: advisorData } = await supabase
+            .from("advisors")
+            .select(`id, name, student_advisor_ranges(start_id, end_id)`)
+            .eq("email", user.email)
+            .single();
 
-            setAdvisorInfo({
-                name: advisorData.name,
-                initial: advisorData.initial,
-                ranges: (advisorData.student_advisor_ranges as any[]).map(r => ({
-                    start_id: r.start_id,
-                    end_id: r.end_id
-                }))
-            });
+        if (!advisorData) {
+            setLoading(false);
+            return;
+        }
 
-            // 2. Fetch students registered to this advisor
-            const { data: regData, error: regError } = await supabase
-                .from("registrations")
-                .select(`
-                    id,
-                    student_id,
-                    student_name,
-                    created_at,
-                    sections (name),
-                    lab_groups (name)
-                `)
-                .eq("advisor_id", advisorData.id)
-                .order("created_at", { ascending: false });
+        setAdvisorInfo({
+            name: advisorData.name,
+            ranges: advisorData.student_advisor_ranges as any[],
+        });
 
-            if (!regError && regData) {
-                const formatted = regData.map((r: any) => ({
+        const { data: regData } = await supabase
+            .from("registrations")
+            .select(`id, student_id, student_name, advisor_completed, timestamp, sections(name), lab_groups(name)`)
+            .eq("advisor_id", advisorData.id)
+            .order("student_id", { ascending: true });
+
+        if (regData) {
+            setStudents(
+                regData.map((r: any) => ({
                     id: r.id,
                     student_id: r.student_id,
                     student_name: r.student_name,
                     section_name: r.sections?.name || "N/A",
-                    lab_group_name: r.lab_groups?.name || "None",
-                    created_at: new Date(r.created_at).toLocaleDateString()
-                }));
-                setRegistrations(formatted);
-            }
-            setLoading(false);
+                    lab_group_name: r.lab_groups?.name || "—",
+                    advisor_completed: r.advisor_completed,
+                    created_at: new Date(r.timestamp).toLocaleDateString(),
+                }))
+            );
         }
+        setLoading(false);
+    }
 
-        fetchAdvisorData();
-    }, []);
+    async function toggleCompletion(regId: string, current: boolean) {
+        setToggling(regId);
+        const { error } = await supabase
+            .from("registrations")
+            .update({ advisor_completed: !current })
+            .eq("id", regId);
 
-    const filteredRegs = registrations.filter(r =>
-        r.student_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        r.student_name.toLowerCase().includes(searchQuery.toLowerCase())
+        if (error) {
+            toast.error("Failed to update: " + error.message);
+        } else {
+            toast.success(current ? "Marked as pending" : "Marked as completed ✓");
+            setStudents(prev =>
+                prev.map(s => s.id === regId ? { ...s, advisor_completed: !current } : s)
+            );
+        }
+        setToggling(null);
+    }
+
+    async function handleLogout() {
+        await supabase.auth.signOut();
+        router.push("/auth/login");
+    }
+
+    const filtered = students.filter(s =>
+        s.student_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        s.student_name.toLowerCase().includes(searchQuery.toLowerCase())
     );
+    const doneCount = students.filter(s => s.advisor_completed).length;
 
-    if (loading) return <div className="p-10 text-center">Loading advisor console...</div>;
+    if (loading) return <div className="p-10 text-center text-muted-foreground">Loading advisor console...</div>;
 
     if (!advisorInfo) {
         return (
             <div className="p-10 text-center space-y-4">
                 <h1 className="text-2xl font-bold text-red-600">Advisor Record Not Found</h1>
-                <p>Your email is not registered as an advisor in the system.</p>
+                <p className="text-muted-foreground">Your email is not registered in the advisor list.</p>
+                <Button variant="outline" onClick={handleLogout}>Logout</Button>
             </div>
         );
     }
@@ -120,38 +125,62 @@ export default function AdvisorDashboard() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">Welcome, {advisorInfo.name}</h1>
-                    <p className="text-muted-foreground">Managing pre-registrations for your assigned ranges.</p>
+                    <p className="text-muted-foreground text-sm mt-1">
+                        Mark students as completed once you finish their advising session.
+                    </p>
+                    <div className="flex flex-wrap gap-2 mt-3">
+                        {advisorInfo.ranges.map((range: any, i: number) => (
+                            <Badge key={i} variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                                Range: {range.start_id} — {range.end_id}
+                            </Badge>
+                        ))}
+                    </div>
                 </div>
-                <div className="flex gap-2">
-                    {advisorInfo.ranges.map((range, i) => (
-                        <Badge key={i} variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 py-1 px-3">
-                            Range: {range.start_id} — {range.end_id}
-                        </Badge>
-                    ))}
-                </div>
+                <Button variant="ghost" size="sm" onClick={handleLogout} className="gap-2 self-start">
+                    <LogOut className="h-4 w-4" /> Logout
+                </Button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                        <CardTitle className="text-sm font-medium">Total Registered</CardTitle>
+                        <CardTitle className="text-sm font-medium">Total Students</CardTitle>
                         <Users className="w-4 h-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{registrations.length}</div>
-                        <p className="text-xs text-muted-foreground">Students under your supervision</p>
+                        <div className="text-2xl font-bold">{students.length}</div>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                        <CardTitle className="text-sm font-medium">Completed</CardTitle>
+                        <CheckCircle2 className="w-4 h-4 text-green-500" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold text-green-600">{doneCount}</div>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                        <CardTitle className="text-sm font-medium">Remaining</CardTitle>
+                        <Circle className="w-4 h-4 text-amber-500" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold text-amber-600">{students.length - doneCount}</div>
                     </CardContent>
                 </Card>
             </div>
 
-            <Card className="shadow-sm">
+            {/* Student Table */}
+            <Card>
                 <CardHeader>
                     <div className="flex items-center justify-between">
                         <div>
-                            <CardTitle>Registered Students</CardTitle>
-                            <CardDescription>Real-time list of students who completed pre-registration</CardDescription>
+                            <CardTitle>Student List</CardTitle>
+                            <CardDescription>Mark each student when their advising is done.</CardDescription>
                         </div>
-                        <div className="relative w-64">
+                        <div className="relative w-56">
                             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                             <Input
                                 placeholder="Search by ID or Name"
@@ -175,26 +204,46 @@ export default function AdvisorDashboard() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {filteredRegs.map((reg) => (
-                                <TableRow key={reg.id}>
-                                    <TableCell className="font-medium">{reg.student_id}</TableCell>
-                                    <TableCell>{reg.student_name}</TableCell>
-                                    <TableCell>
-                                        <Badge variant="secondary">Section {reg.section_name}</Badge>
+                            {filtered.map((s) => (
+                                <TableRow
+                                    key={s.id}
+                                    className={s.advisor_completed ? "bg-green-50/60" : ""}
+                                >
+                                    <TableCell className="font-mono text-sm font-medium">
+                                        {s.student_id}
                                     </TableCell>
-                                    <TableCell>{reg.lab_group_name}</TableCell>
-                                    <TableCell className="text-muted-foreground">{reg.created_at}</TableCell>
+                                    <TableCell>
+                                        <span className={s.advisor_completed ? "text-green-700 font-semibold" : ""}>
+                                            {s.student_name}
+                                        </span>
+                                    </TableCell>
+                                    <TableCell>
+                                        <Badge variant="secondary">Section {s.section_name}</Badge>
+                                    </TableCell>
+                                    <TableCell className="text-muted-foreground">{s.lab_group_name}</TableCell>
+                                    <TableCell className="text-muted-foreground text-sm">{s.created_at}</TableCell>
                                     <TableCell className="text-right">
-                                        <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50">
-                                            <UserCheck className="w-3 h-3 mr-1" /> Verified
-                                        </Badge>
+                                        <Button
+                                            size="sm"
+                                            variant={s.advisor_completed ? "outline" : "default"}
+                                            className={s.advisor_completed
+                                                ? "border-green-500 text-green-700 hover:bg-green-50 gap-1"
+                                                : "gap-1"}
+                                            onClick={() => toggleCompletion(s.id, s.advisor_completed)}
+                                            disabled={toggling === s.id}
+                                        >
+                                            {s.advisor_completed
+                                                ? <><CheckCircle2 className="h-3.5 w-3.5" /> Done</>
+                                                : <><Circle className="h-3.5 w-3.5" /> Mark Done</>
+                                            }
+                                        </Button>
                                     </TableCell>
                                 </TableRow>
                             ))}
-                            {filteredRegs.length === 0 && (
+                            {filtered.length === 0 && (
                                 <TableRow>
                                     <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
-                                        No students found matching your search.
+                                        No students found.
                                     </TableCell>
                                 </TableRow>
                             )}

@@ -39,27 +39,33 @@ export default function LoginPage() {
 
     // After login, determine where to redirect based on role in authorized_staff
     const redirectByRole = async (userEmail: string) => {
-        const { data } = await supabase
-            .from("authorized_staff")
-            .select("role")
-            .eq("email", userEmail)
-            .single();
+        try {
+            const { data, error } = await supabase
+                .from("authorized_staff")
+                .select("role")
+                .eq("email", userEmail)
+                .maybeSingle(); // maybeSingle won't error if no row found
 
-        if (data?.role === "developer") return router.push("/developer");
-        if (data?.role === "admin")     return router.push("/admin");
-        if (data?.role === "advisor")   return router.push("/advisor");
-        if (data?.role === "cr")        return router.push("/cr/manage");
+            if (error) throw error;
 
-        // Check if pending CR application
-        const { data: pending } = await supabase
-            .from("cr_applications")
-            .select("id")
-            .eq("email", userEmail)
-            .eq("status", "pending")
-            .maybeSingle();
+            if (data?.role === "developer") { router.push("/developer"); return; }
+            if (data?.role === "admin")     { router.push("/admin");     return; }
+            if (data?.role === "advisor")   { router.push("/advisor");   return; }
+            if (data?.role === "cr")        { router.push("/cr/manage"); return; }
 
-        if (pending) return router.push("/auth/pending?type=cr");
-        return router.push("/auth/unauthorized");
+            // Not in authorized_staff — check if pending CR application
+            const { data: pending } = await supabase
+                .from("cr_applications")
+                .select("id")
+                .eq("email", userEmail)
+                .eq("status", "pending")
+                .maybeSingle();
+
+            if (pending) { router.push("/auth/pending?type=cr"); return; }
+            router.push("/auth/unauthorized");
+        } catch (err: any) {
+            setError("Login succeeded but role lookup failed: " + (err?.message || String(err)));
+        }
     };
 
     // ── LOGIN ──────────────────────────────────────────────────────────────────
@@ -80,19 +86,24 @@ export default function LoginPage() {
             return;
         }
 
-        const { error: authErr } = await supabase.auth.signInWithPassword({
-            email: trimmedEmail,
-            password,
-        });
+        try {
+            const { error: authErr } = await supabase.auth.signInWithPassword({
+                email: trimmedEmail,
+                password,
+            });
 
-        if (authErr) {
-            setError(authErr.message);
+            if (authErr) {
+                setError(authErr.message);
+                setLoading(false);
+                return;
+            }
+
+            await redirectByRole(trimmedEmail);
+        } catch (err: any) {
+            setError("Unexpected error: " + (err?.message || String(err)));
+        } finally {
             setLoading(false);
-            return;
         }
-
-        await redirectByRole(trimmedEmail);
-        setLoading(false);
     };
 
     // ── REGISTER ───────────────────────────────────────────────────────────────
