@@ -1,0 +1,2 @@
+ALTER TABLE authorized_staff
+ADD COLUMN IF NOT EXISTS name TEXT;

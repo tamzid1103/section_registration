@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { allowedDomains, developerAllowlist } from '@/lib/auth-constants'
 
 export async function middleware(request: NextRequest) {
     let response = NextResponse.next({
@@ -62,9 +63,18 @@ export async function middleware(request: NextRequest) {
     if (session?.user?.email) {
         const email = session.user.email
         const domain = email.split('@')[1]
-        const allowedDomains = ['diu.edu.bd', 'daffodilvarsity.edu.bd']
 
-        if (!allowedDomains.includes(domain)) {
+        const { data: staffRecord } = await supabase
+            .from('authorized_staff')
+            .select('role')
+            .eq('email', email)
+            .single()
+
+        const isDeveloper = staffRecord?.role === 'developer'
+        const isDeveloperEmail = developerAllowlist.includes(email.toLowerCase())
+        const isDomainAllowed = allowedDomains.includes((domain || '').toLowerCase())
+
+        if (!isDomainAllowed && !isDeveloperEmail) {
             await supabase.auth.signOut()
             return NextResponse.redirect(new URL('/auth/unauthorized', request.url))
         }
@@ -75,26 +85,34 @@ export async function middleware(request: NextRequest) {
         const isTryingToAccessStaff = staffPaths.some(path => request.nextUrl.pathname.startsWith(path))
 
         if (isTryingToAccessStaff) {
-            const { data: staffRecord } = await supabase
-                .from('authorized_staff')
-                .select('role')
-                .eq('email', email)
-                .single()
-
             if (!staffRecord) {
-                // Not a CR, Advisor, or Admin
+                const { data: pending } = await supabase
+                    .from('cr_applications')
+                    .select('id')
+                    .eq('email', email)
+                    .eq('status', 'pending')
+                    .maybeSingle()
+
+                if (pending) {
+                    return NextResponse.redirect(new URL('/auth/pending', request.url))
+                }
+
+                // Not a CR, Advisor, Admin, or Developer
                 return NextResponse.redirect(new URL('/auth/unauthorized', request.url))
             }
 
             // Role-based routing
             const path = request.nextUrl.pathname
-            if (path.startsWith('/admin') && staffRecord.role !== 'admin') {
+            if (path.startsWith('/developer') && staffRecord.role !== 'developer') {
                 return NextResponse.redirect(new URL('/auth/unauthorized', request.url))
             }
-            if (path.startsWith('/cr') && !['cr', 'admin'].includes(staffRecord.role)) {
+            if (path.startsWith('/admin') && !['admin', 'developer'].includes(staffRecord.role)) {
                 return NextResponse.redirect(new URL('/auth/unauthorized', request.url))
             }
-            if (path.startsWith('/advisor') && !['advisor', 'admin'].includes(staffRecord.role)) {
+            if (path.startsWith('/cr') && !['cr', 'admin', 'developer'].includes(staffRecord.role)) {
+                return NextResponse.redirect(new URL('/auth/unauthorized', request.url))
+            }
+            if (path.startsWith('/advisor') && !['advisor', 'admin', 'developer'].includes(staffRecord.role)) {
                 return NextResponse.redirect(new URL('/auth/unauthorized', request.url))
             }
         }
