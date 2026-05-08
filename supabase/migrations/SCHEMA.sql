@@ -378,7 +378,7 @@ CREATE POLICY "Admin manages advisor_ranges"
 -- cr_registration_logs — easy overview of who registered whom
 -- ────────────────────────────────────────────────────────────
 
-CREATE OR REPLACE VIEW cr_registration_logs AS
+CREATE OR REPLACE VIEW cr_registration_logs WITH (security_invoker = true) AS
 SELECT
   r.id,
   r.student_id,
