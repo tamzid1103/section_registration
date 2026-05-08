@@ -41,7 +41,8 @@ export default function StudentHub() {
     async function fetchData() {
         const { data: secs } = await supabase
             .from("sections")
-            .select("id, name, capacity, semester_id, semesters(name, is_active)")
+            .select("id, name, capacity, semester_id, semesters!inner(name, is_active)")
+            .eq("semesters.is_active", true)
             .order("name");
         const { data: regs } = await supabase.from("registrations").select("section_id");
         const { data: advs } = await supabase.from("advisors")
@@ -92,6 +93,10 @@ export default function StudentHub() {
                             <LogIn className="w-4 h-4" /> Staff Login
                         </Link>
                     )}
+                    <a href="#advisors"
+                        className="flex items-center gap-1.5 text-blue-100 hover:text-white text-sm border border-blue-300 hover:border-white rounded-lg px-3 py-1.5 transition-colors">
+                        <GraduationCap className="w-4 h-4" /> Advisors
+                    </a>
                 </div>
             </div>
 
@@ -144,7 +149,7 @@ export default function StudentHub() {
                         </div>
 
                         {/* Advisor List */}
-                        <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2 pt-4">
+                        <h2 id="advisors" className="text-xl font-bold text-slate-800 flex items-center gap-2 pt-4">
                             <GraduationCap className="w-5 h-5 text-blue-600" /> Advisors
                         </h2>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -153,7 +158,8 @@ export default function StudentHub() {
                                     <CardContent className="p-4">
                                         <p className="font-semibold text-slate-800">{a.name}</p>
                                         <p className="text-xs text-slate-500">{a.designation || 'Advisor'}</p>
-                                        {a.phone && <p className="text-xs text-blue-600 mt-1">📞 {a.phone}</p>}
+                                        <p className="text-xs text-blue-600 mt-1">📧 {a.email}</p>
+                                        {a.phone && <p className="text-xs text-slate-500 mt-0.5">📞 {a.phone}</p>}
                                         <div className="flex flex-wrap gap-1 mt-2">
                                             {(a.student_advisor_ranges || []).map((r: any, i: number) => (
                                                 <Badge key={i} variant="outline" className="text-[10px]">{r.start_id} – {r.end_id}</Badge>

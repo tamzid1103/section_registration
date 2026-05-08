@@ -10,6 +10,8 @@ export function PortalNavigation() {
     const pathname = usePathname()
     const router = useRouter()
     const [role, setRole] = useState<string | null>(null)
+    const [staffName, setStaffName] = useState<string | null>(null)
+    const [crSection, setCrSection] = useState<string | null>(null)
     const [pendingCount, setPendingCount] = useState(0)
 
     const isPortalPage = pathname.startsWith('/cr') || pathname.startsWith('/advisor') ||
@@ -19,8 +21,15 @@ export function PortalNavigation() {
         if (!isPortalPage) return
         const { data: { user } } = await supabase.auth.getUser()
         if (!user?.email) return
-        const { data } = await supabase.from('authorized_staff').select('role').eq('email', user.email).single()
-        if (data) setRole(data.role)
+        const { data } = await supabase.from('authorized_staff').select('role, name').eq('email', user.email).single()
+        if (data) {
+            setRole(data.role)
+            setStaffName(data.name)
+            if (data.role === 'cr') {
+                const { data: appData } = await supabase.from('cr_applications').select('section_interested').eq('email', user.email).eq('status', 'approved').maybeSingle()
+                if (appData) setCrSection(appData.section_interested)
+            }
+        }
     }, [isPortalPage])
 
     const fetchPendingCount = useCallback(async () => {
@@ -93,15 +102,21 @@ export function PortalNavigation() {
                     ))}
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-3 shrink-0">
                     {['admin', 'developer'].includes(role) && pendingCount > 0 && (
-                        <Link href="/admin/users" className="flex items-center gap-1 text-red-600 text-xs font-semibold animate-pulse">
+                        <Link href="/admin/users" className="flex items-center gap-1 text-red-600 text-xs font-semibold animate-pulse mr-2">
                             <Bell className="w-3.5 h-3.5" /> {pendingCount} pending
                         </Link>
                     )}
-                    <span className="text-xs text-slate-400 capitalize border border-slate-200 px-2 py-1 rounded-full">{role}</span>
+                    <div className="flex flex-col items-end hidden sm:flex">
+                        <span className="text-sm font-semibold text-slate-800 leading-tight">{staffName}</span>
+                        <div className="flex items-center gap-1">
+                            <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">{role}</span>
+                            {crSection && <span className="text-[10px] text-blue-600 font-bold bg-blue-50 px-1.5 rounded-sm">Sec {crSection}</span>}
+                        </div>
+                    </div>
                     <button onClick={handleLogout}
-                        className="flex items-center gap-1.5 text-sm text-red-600 hover:text-red-800 border border-red-200 hover:border-red-400 px-3 py-1.5 rounded-lg transition-colors">
+                        className="flex items-center gap-1.5 text-sm text-red-600 hover:text-red-800 border border-red-200 hover:border-red-400 px-3 py-1.5 rounded-lg transition-colors ml-1">
                         <LogOut className="w-3.5 h-3.5" /> Logout
                     </button>
                 </div>

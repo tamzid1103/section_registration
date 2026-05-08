@@ -10,6 +10,7 @@ import {
     Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle,
 } from "@/components/ui/card";
 import { InfoIcon, KeyRound, User, GraduationCap, Shield } from "lucide-react";
+import Link from "next/link";
 
 type Mode = "login" | "register";
 type RegisterRole = "cr" | "advisor";
@@ -273,7 +274,14 @@ export default function LoginPage() {
 
                     {/* Password */}
                     <div className="space-y-1.5">
-                        <label className="text-sm font-medium">Password</label>
+                        <div className="flex items-center justify-between">
+                            <label className="text-sm font-medium">Password</label>
+                            {mode === "login" && (
+                                <Link href="/auth/forgot-password" className="text-xs text-blue-600 hover:underline">
+                                    Forgot password?
+                                </Link>
+                            )}
+                        </div>
                         <Input
                             type="password"
                             placeholder="Enter your password"

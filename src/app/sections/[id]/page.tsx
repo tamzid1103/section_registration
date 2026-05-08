@@ -1,11 +1,12 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, use } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Badge } from '@/components/ui/badge'
 import { CheckCircle2, ArrowLeft, Users } from 'lucide-react'
 import Link from 'next/link'
 
-export default function SectionDetailPage({ params }: { params: { id: string } }) {
+export default function SectionDetailPage({ params }: { params: Promise<{ id: string }> }) {
+    const { id } = use(params)
     const [section, setSection] = useState<any>(null)
     const [labGroups, setLabGroups] = useState<any[]>([])
     const [studentsByLab, setStudentsByLab] = useState<Record<string, any[]>>({})
@@ -14,17 +15,17 @@ export default function SectionDetailPage({ params }: { params: { id: string } }
     useEffect(() => {
         async function load() {
             const { data: sec } = await supabase
-                .from('sections').select('*, semesters(name)').eq('id', params.id).single()
+                .from('sections').select('*, semesters(name)').eq('id', id).single()
             setSection(sec)
 
             const { data: lgs } = await supabase
-                .from('lab_groups').select('*').eq('section_id', params.id).order('name')
+                .from('lab_groups').select('*').eq('section_id', id).order('name')
             setLabGroups(lgs || [])
 
             const { data: regs } = await supabase
                 .from('registrations')
                 .select('*, lab_groups(name), advisors(name)')
-                .eq('section_id', params.id)
+                .eq('section_id', id)
                 .order('student_id')
 
             const byLab: Record<string, any[]> = { unassigned: [] }
@@ -37,7 +38,7 @@ export default function SectionDetailPage({ params }: { params: { id: string } }
             setLoading(false)
         }
         load()
-    }, [params.id])
+    }, [id])
 
     if (loading) return <div className="p-10 text-center text-muted-foreground">Loading...</div>
     if (!section) return <div className="p-10 text-center text-red-500">Section not found.</div>
