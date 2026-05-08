@@ -68,7 +68,7 @@ export async function middleware(request: NextRequest) {
             .from('authorized_staff')
             .select('role')
             .eq('email', email)
-            .single()
+            .maybeSingle()
 
         const isDeveloper = staffRecord?.role === 'developer'
         const isDeveloperEmail = developerAllowlist.includes(email.toLowerCase())

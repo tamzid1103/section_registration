@@ -37,23 +37,23 @@ export default function LoginPage() {
         return allowedDomains.includes(domain);
     };
 
-    // After login, determine where to redirect based on role in authorized_staff
+    // After login, look up role in authorized_staff and redirect accordingly
     const redirectByRole = async (userEmail: string) => {
         try {
-            const { data, error } = await supabase
+            const { data, error: qErr } = await supabase
                 .from("authorized_staff")
                 .select("role")
                 .eq("email", userEmail)
-                .maybeSingle(); // maybeSingle won't error if no row found
+                .maybeSingle();
 
-            if (error) throw error;
+            if (qErr) throw qErr;
 
             if (data?.role === "developer") { router.push("/developer"); return; }
             if (data?.role === "admin")     { router.push("/admin");     return; }
             if (data?.role === "advisor")   { router.push("/advisor");   return; }
             if (data?.role === "cr")        { router.push("/cr/manage"); return; }
 
-            // Not in authorized_staff — check if pending CR application
+            // Not in authorized_staff — check if they have a pending CR application
             const { data: pending } = await supabase
                 .from("cr_applications")
                 .select("id")
@@ -94,7 +94,6 @@ export default function LoginPage() {
 
             if (authErr) {
                 setError(authErr.message);
-                setLoading(false);
                 return;
             }
 
@@ -107,6 +106,8 @@ export default function LoginPage() {
     };
 
     // ── REGISTER ───────────────────────────────────────────────────────────────
+    // Registration is handled via an API route (uses service role) to bypass
+    // email confirmation and RLS restrictions for unauthenticated new users.
     const handleRegister = async () => {
         setLoading(true);
         setError(null);
@@ -117,109 +118,63 @@ export default function LoginPage() {
             setLoading(false);
             return;
         }
-
-        // Developers cannot self-register — they are pre-seeded
         if (isDeveloper(trimmedEmail)) {
             setError("Developer accounts cannot be self-registered. Use the login form.");
             setLoading(false);
             return;
         }
-
         if (!isAllowedDomain(trimmedEmail)) {
             setError("Only DIU university emails (@diu.edu.bd or @daffodilvarsity.edu.bd) can register.");
             setLoading(false);
             return;
         }
-
-        if (registerRole === "cr") {
-            if (!studentId || !sectionInterested) {
-                setError("Student ID and section are required for CR registration.");
-                setLoading(false);
-                return;
-            }
-        }
-
-        // Create auth account
-        const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
-            email: trimmedEmail,
-            password,
-        });
-
-        if (signUpErr) {
-            setError(signUpErr.message);
+        if (registerRole === "cr" && (!studentId || !sectionInterested)) {
+            setError("Student ID and section are required for CR registration.");
             setLoading(false);
             return;
         }
 
-        const userId = signUpData.user?.id;
-
-        if (registerRole === "cr") {
-            // Insert CR application (status = pending, admin must approve)
-            const { error: appErr } = await supabase.from("cr_applications").insert({
-                user_id: userId,
-                full_name: fullName,
-                student_id: studentId,
-                email: trimmedEmail,
-                section_interested: sectionInterested,
-                status: "pending",
-                applied_at: new Date().toISOString(),
+        try {
+            const res = await fetch("/api/auth/register", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    type: registerRole,
+                    email: trimmedEmail,
+                    password,
+                    fullName,
+                    studentId,
+                    sectionInterested,
+                }),
             });
 
-            if (appErr) {
-                setError(appErr.message);
-                setLoading(false);
+            const json = await res.json();
+
+            if (!res.ok || json.error) {
+                setError(json.error || "Registration failed. Please try again.");
                 return;
             }
 
-            router.push("/auth/pending?type=cr");
-
-        } else {
-            // ADVISOR: check if email exists in admin-managed advisor list
-            const { data: advisorRecord, error: advisorCheckErr } = await supabase
-                .from("advisors")
-                .select("id, name")
-                .eq("email", trimmedEmail)
-                .maybeSingle();
-
-            if (advisorCheckErr || !advisorRecord) {
-                setError(
-                    "Your email is not registered in the advisor list. " +
-                    "Please contact the admin to add your email to the system first."
-                );
-                setLoading(false);
-                return;
+            if (registerRole === "advisor") {
+                // Advisor is auto-approved — sign in immediately
+                const { error: signInErr } = await supabase.auth.signInWithPassword({
+                    email: trimmedEmail,
+                    password,
+                });
+                if (signInErr) {
+                    setError("Account created! Please login now.");
+                    return;
+                }
+                router.push("/advisor");
+            } else {
+                // CR: go to pending page — admin must approve
+                router.push(json.redirect || "/auth/pending?type=cr");
             }
-
-            // Auto-approve: insert into authorized_staff as advisor
-            const { error: staffErr } = await supabase.from("authorized_staff").insert({
-                email: trimmedEmail,
-                role: "advisor",
-                name: fullName,
-            });
-
-            if (staffErr && !staffErr.message.includes("duplicate")) {
-                setError("Account created but could not assign advisor role: " + staffErr.message);
-                setLoading(false);
-                return;
-            }
-
-            // Sign them in immediately
-            const { error: signInErr } = await supabase.auth.signInWithPassword({
-                email: trimmedEmail,
-                password,
-            });
-
-            if (signInErr) {
-                // Account created but sign-in failed (email confirmation may be on)
-                setError("Account created. Please check your email to confirm, then login.");
-                setLoading(false);
-                return;
-            }
-
-            router.push("/advisor");
+        } catch (err: any) {
+            setError("Network error: " + (err?.message || String(err)));
+        } finally {
+            setLoading(false);
         }
-
-        setLoading(false);
     };
 
     const toggleMode = () => {

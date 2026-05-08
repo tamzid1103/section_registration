@@ -48,10 +48,11 @@ export default function AdminCRApprovalPage() {
                 .from('authorized_staff')
                 .insert({
                     email: app.email,
+                    name: app.full_name,
                     role: 'cr'
                 })
 
-            if (staffError && !staffError.message.includes('unique_email')) {
+            if (staffError && !staffError.message.includes('duplicate') && !staffError.message.includes('unique')) {
                 alert("App approved but failed to add to staff: " + staffError.message)
             }
         }

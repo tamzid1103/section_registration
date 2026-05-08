@@ -3,12 +3,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Clock, Home } from "lucide-react"
 
-export default function PendingApprovalPage({
+// searchParams is async in Next.js 15+
+export default async function PendingApprovalPage({
     searchParams,
 }: {
-    searchParams: { type?: string }
+    searchParams: Promise<{ type?: string }>
 }) {
-    const type = searchParams?.type || "cr"
+    const params = await searchParams
+    const type = params?.type || "cr"
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-100 to-amber-50 p-6">
@@ -22,15 +24,15 @@ export default function PendingApprovalPage({
                 <CardContent className="space-y-4 text-center">
                     <p className="text-muted-foreground">
                         {type === "cr"
-                            ? "Your CR application has been submitted and is awaiting admin approval. You will be able to access the CR portal once approved."
+                            ? "Your CR application has been submitted and is awaiting admin approval. Login again after approval to access the CR portal."
                             : "Your advisor application is pending. Please check with the admin."}
                     </p>
                     <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
                         <strong>What happens next?</strong>
                         <p className="mt-1">
                             {type === "cr"
-                                ? "An admin will review your application. Once approved, login again to access the CR portal."
-                                : "Contact admin if you believe your email should be registered."}
+                                ? "An admin will review your CR application. Once approved, come back and login."
+                                : "Contact admin if you believe your email should be in the advisor list."}
                         </p>
                     </div>
                     <Button asChild className="w-full gap-2">

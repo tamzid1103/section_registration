@@ -4,62 +4,65 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
-import { Search, ShieldAlert, Users, Calendar, LogOut, Settings } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
+import { Users, ShieldAlert, Calendar, Settings, Bell, GraduationCap, Download, TrendingUp } from 'lucide-react'
 import Link from 'next/link'
 
 export default function AdminDashboard() {
-    const [stats, setStats] = useState({
-        totalStudents: 0,
-        activeSemester: 'None',
-        sectionsCount: 0,
-        crCount: 0
-    })
-    const [recentLogs, setRecentLogs] = useState<any[]>([])
-    const [search, setSearch] = useState('')
     const supabase = createClient()
-    const router = useRouter()
+
+    const [stats, setStats] = useState({ totalStudents: 0, activeSemester: 'None', sectionsCount: 0, crCount: 0, pendingApps: 0 })
+    const [auditLogs, setAuditLogs] = useState<any[]>([])
+    const [advisorProgress, setAdvisorProgress] = useState<any[]>([])
+    const [semesterHistory, setSemesterHistory] = useState<any[]>([])
 
     useEffect(() => {
-        fetchStats()
-        fetchLogs()
+        fetchAll()
+        const ch = supabase.channel('admin-rt')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'cr_applications' }, fetchAll)
+            .subscribe()
+        return () => { supabase.removeChannel(ch) }
     }, [])
 
-    async function fetchStats() {
-        const { data: semester } = await supabase.from('semesters').select('id, name').eq('is_active', true).single()
-        const { count: students } = await supabase.from('registrations').select('*', { count: 'exact', head: true })
-        const { count: crs } = await supabase.from('authorized_staff').select('*', { count: 'exact', head: true }).eq('role', 'cr')
-        const { count: sections } = await supabase.from('sections').select('*', { count: 'exact', head: true }).eq('semester_id', semester?.id || '')
+    async function fetchAll() {
+        const [semRes, studRes, crRes, pendRes, logRes, advRes, histRes] = await Promise.all([
+            supabase.from('semesters').select('id, name').eq('is_active', true).maybeSingle(),
+            supabase.from('registrations').select('id', { count: 'exact', head: true }),
+            supabase.from('authorized_staff').select('id', { count: 'exact', head: true }).eq('role', 'cr'),
+            supabase.from('cr_applications').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+            supabase.from('audit_logs').select('*').order('timestamp', { ascending: false }).limit(10),
+            supabase.from('advisors').select('id, name, registrations(id, advisor_completed)'),
+            supabase.from('semesters').select('id, name, is_active').order('created_at', { ascending: false }),
+        ])
+
+        const semId = semRes.data?.id
+        const { count: secCount } = await supabase.from('sections').select('id', { count: 'exact', head: true }).eq('semester_id', semId || '')
 
         setStats({
-            totalStudents: students || 0,
-            activeSemester: semester?.name || 'In-between Semesters',
-            sectionsCount: sections || 0,
-            crCount: crs || 0
+            totalStudents: studRes.count || 0,
+            activeSemester: semRes.data?.name || 'No Active Semester',
+            sectionsCount: secCount || 0,
+            crCount: crRes.count || 0,
+            pendingApps: pendRes.count || 0,
         })
+        if (logRes.data) setAuditLogs(logRes.data)
+        if (advRes.data) {
+            setAdvisorProgress(advRes.data.map((a: any) => {
+                const total = a.registrations?.length || 0
+                const done = a.registrations?.filter((r: any) => r.advisor_completed)?.length || 0
+                return { name: a.name, total, done, pct: total > 0 ? Math.round((done / total) * 100) : 0 }
+            }))
+        }
+        if (histRes.data) setSemesterHistory(histRes.data)
     }
 
-    async function fetchLogs() {
-        const { data } = await supabase
-            .from('cr_registration_logs')
-            .select('*')
-            .order('created_at', { ascending: false })
-            .limit(10)
-        if (data) setRecentLogs(data)
+    function exportAuditCSV() {
+        const rows = auditLogs.map(l => [l.action, l.note, new Date(l.timestamp).toLocaleString()])
+        const csv = [['Action', 'Details', 'Time'], ...rows].map(r => r.join(',')).join('\n')
+        const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
+        a.download = 'audit_log.csv'; a.click()
     }
-
-    async function handleLogout() {
-        await supabase.auth.signOut()
-        router.push('/auth/login')
-    }
-
-    const filtered = recentLogs.filter(l =>
-        (l.student_name || '').toLowerCase().includes(search.toLowerCase()) ||
-        (l.student_id || '').includes(search)
-    )
 
     return (
         <div className="container mx-auto p-6 space-y-8">
@@ -68,112 +71,130 @@ export default function AdminDashboard() {
                     <h1 className="text-4xl font-extrabold tracking-tight">Admin Dashboard</h1>
                     <Badge variant="secondary" className="mt-1 px-3 py-0.5">{stats.activeSemester}</Badge>
                 </div>
-                <Button variant="ghost" size="sm" onClick={handleLogout} className="gap-2">
-                    <LogOut className="h-4 w-4" /> Logout
-                </Button>
+                {stats.pendingApps > 0 && (
+                    <Link href="/admin/users" className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 text-sm font-semibold px-4 py-2 rounded-lg animate-pulse">
+                        <Bell className="h-4 w-4" /> {stats.pendingApps} Pending CR Application{stats.pendingApps > 1 ? 's' : ''}
+                    </Link>
+                )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {/* Stats Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
                         <CardTitle className="text-sm font-medium">Total Registrations</CardTitle>
                         <Users className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
-                    <CardContent><div className="text-2xl font-bold">{stats.totalStudents}</div></CardContent>
+                    <CardContent><div className="text-3xl font-bold">{stats.totalStudents}</div></CardContent>
                 </Card>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
                         <CardTitle className="text-sm font-medium">Active CRs</CardTitle>
                         <ShieldAlert className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
-                    <CardContent><div className="text-2xl font-bold">{stats.crCount}</div></CardContent>
+                    <CardContent><div className="text-3xl font-bold">{stats.crCount}</div></CardContent>
                 </Card>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
                         <CardTitle className="text-sm font-medium">Sections</CardTitle>
                         <Calendar className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
-                    <CardContent><div className="text-2xl font-bold">{stats.sectionsCount}</div></CardContent>
+                    <CardContent><div className="text-3xl font-bold">{stats.sectionsCount}</div></CardContent>
                 </Card>
-                <Card className="bg-primary text-primary-foreground">
+                <Card className={stats.pendingApps > 0 ? 'border-red-300 bg-red-50' : ''}>
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium">System Health</CardTitle>
-                        <div className="h-2 w-2 rounded-full bg-green-400 animate-pulse" />
+                        <CardTitle className="text-sm font-medium">Pending CR Apps</CardTitle>
+                        <Bell className={`h-4 w-4 ${stats.pendingApps > 0 ? 'text-red-500' : 'text-muted-foreground'}`} />
                     </CardHeader>
-                    <CardContent><div className="text-2xl font-bold">Operational</div></CardContent>
+                    <CardContent>
+                        <div className={`text-3xl font-bold ${stats.pendingApps > 0 ? 'text-red-600' : ''}`}>{stats.pendingApps}</div>
+                    </CardContent>
                 </Card>
             </div>
 
-            <div className="grid md:grid-cols-3 gap-8">
-                <Card className="md:col-span-2">
+            <div className="grid md:grid-cols-3 gap-6">
+                {/* Advisor Progress */}
+                <Card className="md:col-span-1">
                     <CardHeader>
-                        <div className="flex justify-between items-center">
-                            <CardTitle>Recent Registration Activity</CardTitle>
-                            <div className="relative w-64">
-                                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                                <Input
-                                    placeholder="Search students..."
-                                    className="pl-8"
-                                    value={search}
-                                    onChange={e => setSearch(e.target.value)}
-                                />
-                            </div>
-                        </div>
+                        <CardTitle className="flex items-center gap-2 text-base">
+                            <TrendingUp className="h-4 w-4 text-blue-500" /> Advisor Completion
+                        </CardTitle>
                     </CardHeader>
-                    <CardContent>
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Student</TableHead>
-                                    <TableHead>Section</TableHead>
-                                    <TableHead>CR</TableHead>
-                                    <TableHead>Time</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {filtered.map((log) => (
-                                    <TableRow key={log.id}>
-                                        <TableCell>
-                                            <div className="font-semibold">{log.student_name}</div>
-                                            <div className="text-xs text-muted-foreground">{log.student_id}</div>
-                                        </TableCell>
-                                        <TableCell><Badge variant="outline">{log.section_name}</Badge></TableCell>
-                                        <TableCell>
-                                            <div className="text-sm font-medium">{log.cr_name}</div>
-                                            <div className="text-[10px] text-muted-foreground">{log.cr_email}</div>
-                                        </TableCell>
-                                        <TableCell className="text-xs">
-                                            {new Date(log.created_at).toLocaleTimeString()}
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                                {filtered.length === 0 && (
-                                    <TableRow>
-                                        <TableCell colSpan={4} className="text-center py-8 text-muted-foreground italic">
-                                            No recent activity
-                                        </TableCell>
-                                    </TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
+                    <CardContent className="space-y-4">
+                        {advisorProgress.length === 0 && (
+                            <p className="text-sm text-muted-foreground italic">No advisors yet.</p>
+                        )}
+                        {advisorProgress.map(a => (
+                            <div key={a.name} className="space-y-1">
+                                <div className="flex justify-between text-sm">
+                                    <span className="font-medium truncate">{a.name}</span>
+                                    <span className="text-muted-foreground shrink-0 ml-2">{a.done}/{a.total}</span>
+                                </div>
+                                <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                                    <div
+                                        className={`h-full rounded-full transition-all duration-500 ${a.pct === 100 ? 'bg-green-500' : a.pct >= 50 ? 'bg-blue-500' : 'bg-amber-400'}`}
+                                        style={{ width: `${a.pct}%` }}
+                                    />
+                                </div>
+                                <p className="text-xs text-muted-foreground">{a.pct}% advised</p>
+                            </div>
+                        ))}
                     </CardContent>
                 </Card>
 
+                {/* Audit Log */}
+                <Card className="md:col-span-1">
+                    <CardHeader>
+                        <div className="flex items-center justify-between">
+                            <CardTitle className="text-base">Recent Activity</CardTitle>
+                            <Button size="sm" variant="ghost" onClick={exportAuditCSV}>
+                                <Download className="h-3.5 w-3.5 mr-1" /> CSV
+                            </Button>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                        {auditLogs.length === 0 && <p className="text-sm text-muted-foreground italic">No activity yet.</p>}
+                        {auditLogs.map(log => (
+                            <div key={log.id} className="border-b pb-2 last:border-0 last:pb-0">
+                                <div className="flex items-center gap-2">
+                                    <Badge variant={log.action === 'DELETE' ? 'destructive' : log.action === 'EDIT' ? 'secondary' : 'default'} className="text-[10px]">
+                                        {log.action}
+                                    </Badge>
+                                    <span className="text-xs text-muted-foreground">{new Date(log.timestamp).toLocaleString()}</span>
+                                </div>
+                                <p className="text-xs text-slate-700 mt-1">{log.note}</p>
+                            </div>
+                        ))}
+                    </CardContent>
+                </Card>
+
+                {/* Quick Links + Semester History */}
                 <Card>
-                    <CardHeader><CardTitle className="flex gap-2 items-center"><Settings className="h-4 w-4" /> Quick Links</CardTitle></CardHeader>
+                    <CardHeader><CardTitle className="flex gap-2 items-center text-base"><Settings className="h-4 w-4" /> Quick Links</CardTitle></CardHeader>
                     <CardContent className="space-y-2">
-                        <Button variant="outline" className="w-full justify-start" asChild>
-                            <Link href="/admin/users">Manage Users & CR Approvals</Link>
+                        <Button variant="outline" className="w-full justify-start gap-2" asChild>
+                            <Link href="/admin/users"><Bell className="h-4 w-4" /> Users & CR Approvals {stats.pendingApps > 0 && <Badge className="ml-auto bg-red-500 text-white text-xs">{stats.pendingApps}</Badge>}</Link>
                         </Button>
-                        <Button variant="outline" className="w-full justify-start" asChild>
-                            <Link href="/admin/advisors">Manage Advisors</Link>
+                        <Button variant="outline" className="w-full justify-start gap-2" asChild>
+                            <Link href="/admin/advisors"><GraduationCap className="h-4 w-4" /> Manage Advisors</Link>
                         </Button>
-                        <Button variant="outline" className="w-full justify-start" asChild>
-                            <Link href="/admin/semesters">Manage Semesters</Link>
+                        <Button variant="outline" className="w-full justify-start gap-2" asChild>
+                            <Link href="/admin/semesters"><Calendar className="h-4 w-4" /> Manage Semesters</Link>
                         </Button>
-                        <Button variant="outline" className="w-full justify-start" asChild>
-                            <Link href="/admin/sections">Manage Sections</Link>
+                        <Button variant="outline" className="w-full justify-start gap-2" asChild>
+                            <Link href="/admin/sections"><Settings className="h-4 w-4" /> Manage Sections</Link>
                         </Button>
+                        <div className="pt-2 border-t">
+                            <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-widest">Semester History</p>
+                            {semesterHistory.map(s => (
+                                <div key={s.id} className="flex items-center justify-between py-1">
+                                    <span className="text-sm">{s.name}</span>
+                                    <Badge variant={s.is_active ? 'default' : 'outline'} className="text-xs">
+                                        {s.is_active ? 'Active' : 'Archived'}
+                                    </Badge>
+                                </div>
+                            ))}
+                        </div>
                     </CardContent>
                 </Card>
             </div>
