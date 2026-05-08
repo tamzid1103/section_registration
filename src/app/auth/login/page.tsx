@@ -54,7 +54,25 @@ export default function LoginPage() {
             if (data?.role === "advisor")   { router.push("/advisor");   return; }
             if (data?.role === "cr")        { router.push("/cr/manage"); return; }
 
-            // Not in authorized_staff — check if they have a pending CR application
+            // Not in authorized_staff — check if they are in advisors table
+            const { data: advisorRec } = await supabase
+                .from("advisors")
+                .select("id, name")
+                .eq("email", userEmail)
+                .maybeSingle();
+
+            if (advisorRec) {
+                // They are an advisor, auto-add to authorized_staff
+                await supabase.from("authorized_staff").insert({
+                    email: userEmail,
+                    role: "advisor",
+                    name: advisorRec.name,
+                });
+                router.push("/advisor");
+                return;
+            }
+
+            // Check if they have a pending CR application
             const { data: pending } = await supabase
                 .from("cr_applications")
                 .select("id")

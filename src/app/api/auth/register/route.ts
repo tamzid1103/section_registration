@@ -42,11 +42,13 @@ export async function POST(request: Request) {
     })
 
     if (userErr) {
-        // If already registered, that's fine — look up existing user
-        if (!userErr.message.includes('already been registered') && !userErr.message.includes('already exists')) {
-            return NextResponse.json({ error: userErr.message }, { status: 400 })
+        if (userErr.message.includes('already been registered') || userErr.message.includes('already exists')) {
+            return NextResponse.json(
+                { error: 'An account with this email already exists. Please login instead. (Use "Forgot Password" if needed).' }, 
+                { status: 400 }
+            )
         }
-        // User exists — check if they already have a pending application
+        return NextResponse.json({ error: userErr.message }, { status: 400 })
     }
 
     const userId = userData?.user?.id

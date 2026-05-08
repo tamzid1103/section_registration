@@ -184,6 +184,22 @@ CREATE TRIGGER trg_update_advisor_range_numerics
 BEFORE INSERT OR UPDATE ON student_advisor_ranges
 FOR EACH ROW EXECUTE FUNCTION update_advisor_range_numerics();
 
+-- Auto-assign existing students to this new advisor range
+CREATE OR REPLACE FUNCTION auto_assign_advisor_to_existing_registrations()
+RETURNS TRIGGER AS $$
+BEGIN
+    UPDATE registrations
+    SET advisor_id = NEW.advisor_id
+    WHERE public.normalize_student_id(student_id) >= NEW.start_id_numeric
+      AND public.normalize_student_id(student_id) <= NEW.end_id_numeric;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_auto_assign_advisor
+AFTER INSERT OR UPDATE ON student_advisor_ranges
+FOR EACH ROW EXECUTE FUNCTION auto_assign_advisor_to_existing_registrations();
+
 -- Returns the current user's role without triggering recursive RLS
 -- Used inside all RLS policies
 CREATE OR REPLACE FUNCTION auth_user_role()
