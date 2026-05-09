@@ -72,22 +72,30 @@ export default function SectionDetailPage({ params }: { params: Promise<{ id: st
                                 {students.length === 0 ? (
                                     <p className="text-center text-muted-foreground italic py-6 text-sm">No students yet.</p>
                                 ) : students.map((s, i) => (
-                                    <div key={s.id} className={`flex items-center justify-between px-5 py-3 ${s.advisor_completed ? 'bg-green-50' : ''}`}>
-                                        <div className="flex items-center gap-4">
-                                            <span className="text-xs text-slate-400 w-6">{i + 1}</span>
-                                            <div>
-                                                <p className={`font-semibold text-sm ${s.advisor_completed ? 'text-green-700' : 'text-slate-800'}`}>{s.student_name}</p>
-                                                <p className="text-xs font-mono text-slate-500">{s.student_id}</p>
+                                    <div key={s.id} className={`flex flex-col px-5 py-3 ${s.advisor_completed ? 'bg-green-50' : ''}`}>
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-4">
+                                                <span className="text-xs text-slate-400 w-6">{i + 1}</span>
+                                                <div>
+                                                    <p className={`font-semibold text-sm ${s.advisor_completed ? 'text-green-700' : 'text-slate-800'}`}>{s.student_name}</p>
+                                                    <p className="text-xs font-mono text-slate-500">{s.student_id}</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                {s.advisors?.name && (
+                                                    <span className="text-xs text-slate-500 hidden md:block">Advisor: {s.advisors.name}</span>
+                                                )}
+                                                {s.advisor_completed && (
+                                                    <CheckCircle2 className="w-4 h-4 text-green-500" />
+                                                )}
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-3">
-                                            {s.advisors?.name && (
-                                                <span className="text-xs text-slate-500 hidden md:block">Advisor: {s.advisors.name}</span>
-                                            )}
-                                            {s.advisor_completed && (
-                                                <CheckCircle2 className="w-4 h-4 text-green-500" />
-                                            )}
-                                        </div>
+                                        {s.advisor_note && (
+                                            <div className="mt-2 ml-10 text-xs bg-amber-50/80 border border-amber-100 rounded p-2 text-slate-700">
+                                                <span className="font-semibold text-amber-700 mr-1">Note:</span>
+                                                {s.advisor_note}
+                                            </div>
+                                        )}
                                     </div>
                                 ))}
                             </div>
