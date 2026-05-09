@@ -35,6 +35,14 @@ export default function RootLayout({
         <main className="flex-1">
           {children}
         </main>
+        <footer className="py-6 text-center text-sm text-slate-500 bg-white border-t mt-auto w-full">
+          <p>
+            Developed & Maintained by <span className="font-semibold text-slate-800">Tamzidul Haque</span>
+          </p>
+          <p className="mt-1">
+            Need help? Contact me at: <a href="mailto:tamzid.social@gmail.com" className="text-blue-600 hover:underline">tamzid.social@gmail.com</a>
+          </p>
+        </footer>
         <Toaster position="top-center" />
       </body>
     </html>

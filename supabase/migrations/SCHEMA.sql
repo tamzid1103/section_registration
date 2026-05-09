@@ -141,6 +141,7 @@ CREATE TABLE registrations (
   entered_by       UUID REFERENCES authorized_staff(id),
   note             TEXT NOT NULL DEFAULT '',
   advisor_completed BOOLEAN DEFAULT FALSE,
+  advisor_note     TEXT,
   timestamp        TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 

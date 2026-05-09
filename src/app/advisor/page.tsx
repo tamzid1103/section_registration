@@ -22,6 +22,7 @@ interface Student {
     section_name: string;
     lab_group_name: string;
     advisor_completed: boolean;
+    advisor_note: string;
     created_at: string;
 }
 
@@ -31,6 +32,7 @@ export default function AdvisorDashboard() {
     const [advisorInfo, setAdvisorInfo] = useState<{ name: string; ranges: any[] } | null>(null);
     const [searchQuery, setSearchQuery] = useState("");
     const [toggling, setToggling] = useState<string | null>(null);
+    const [savingNote, setSavingNote] = useState<string | null>(null);
     const router = useRouter();
 
     useEffect(() => {
@@ -59,7 +61,7 @@ export default function AdvisorDashboard() {
 
         const { data: regData } = await supabase
             .from("registrations")
-            .select(`id, student_id, student_name, advisor_completed, timestamp, sections(name), lab_groups(name)`)
+            .select(`id, student_id, student_name, advisor_completed, advisor_note, timestamp, sections(name), lab_groups(name)`)
             .eq("advisor_id", advisorData.id)
             .order("student_id", { ascending: true });
 
@@ -72,6 +74,7 @@ export default function AdvisorDashboard() {
                     section_name: r.sections?.name || "N/A",
                     lab_group_name: r.lab_groups?.name || "—",
                     advisor_completed: r.advisor_completed,
+                    advisor_note: r.advisor_note || "",
                     created_at: new Date(r.timestamp).toLocaleDateString(),
                 }))
             );
@@ -95,6 +98,25 @@ export default function AdvisorDashboard() {
             );
         }
         setToggling(null);
+    }
+
+    function updateLocalNote(regId: string, note: string) {
+        setStudents(prev => prev.map(s => s.id === regId ? { ...s, advisor_note: note } : s));
+    }
+
+    async function saveNote(regId: string, note: string) {
+        setSavingNote(regId);
+        const { error } = await supabase
+            .from("registrations")
+            .update({ advisor_note: note.trim() })
+            .eq("id", regId);
+
+        if (error) {
+            toast.error("Failed to save note: " + error.message);
+        } else {
+            toast.success("Note saved");
+        }
+        setSavingNote(null);
     }
 
     async function handleLogout() {
@@ -200,6 +222,7 @@ export default function AdvisorDashboard() {
                                 <TableHead>Section</TableHead>
                                 <TableHead>Lab Group</TableHead>
                                 <TableHead>Date</TableHead>
+                                <TableHead>Note</TableHead>
                                 <TableHead className="text-right">Action</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -222,6 +245,16 @@ export default function AdvisorDashboard() {
                                     </TableCell>
                                     <TableCell className="text-muted-foreground">{s.lab_group_name}</TableCell>
                                     <TableCell className="text-muted-foreground text-sm">{s.created_at}</TableCell>
+                                    <TableCell>
+                                        <Input
+                                            placeholder="Add note..."
+                                            className="h-8 text-sm min-w-[120px] max-w-[200px]"
+                                            value={s.advisor_note}
+                                            onChange={(e) => updateLocalNote(s.id, e.target.value)}
+                                            onBlur={() => saveNote(s.id, s.advisor_note)}
+                                            disabled={savingNote === s.id}
+                                        />
+                                    </TableCell>
                                     <TableCell className="text-right">
                                         <Button
                                             size="sm"
@@ -242,7 +275,7 @@ export default function AdvisorDashboard() {
                             ))}
                             {filtered.length === 0 && (
                                 <TableRow>
-                                    <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
+                                    <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
                                         No students found.
                                     </TableCell>
                                 </TableRow>
