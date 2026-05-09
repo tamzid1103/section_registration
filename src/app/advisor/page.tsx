@@ -210,14 +210,14 @@ export default function AdvisorDashboard() {
     }
 
     return (
-        <div className="max-w-6xl mx-auto py-10 px-6 space-y-8">
+        <div className="max-w-6xl mx-auto py-10 px-6 space-y-8 print:py-0 print:px-0 print:space-y-4">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Welcome, {advisorInfo.name}</h1>
-                    <p className="text-muted-foreground text-sm mt-1">
+                <div className="print:w-full">
+                    <h1 className="text-3xl font-bold tracking-tight print:text-xl">Advising Roster: {advisorInfo.name}</h1>
+                    <p className="text-muted-foreground text-sm mt-1 print:hidden">
                         Mark students as completed once you finish their advising session.
                     </p>
-                    <div className="flex flex-wrap gap-2 mt-3">
+                    <div className="flex flex-wrap gap-2 mt-3 print:mt-1">
                         {advisorInfo.ranges.map((range: any, i: number) => (
                             <Badge key={i} variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
                                 Range: {range.start_id} — {range.end_id}
@@ -232,31 +232,31 @@ export default function AdvisorDashboard() {
 
             {/* Stats */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card>
+                <Card className="print:hidden hover:-translate-y-1 hover:shadow-lg transition-all duration-300 cursor-default">
                     <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                        <CardTitle className="text-sm font-medium">Total Students</CardTitle>
-                        <Users className="w-4 h-4 text-muted-foreground" />
+                        <CardTitle className="text-sm font-medium text-slate-600">Total Students</CardTitle>
+                        <Users className="w-4 h-4 text-blue-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{students.length}</div>
+                        <div className="text-2xl font-bold text-slate-900">{students.length}</div>
                     </CardContent>
                 </Card>
-                <Card className="print:hidden">
+                <Card className="print:hidden hover:-translate-y-1 hover:shadow-lg transition-all duration-300 cursor-default border-green-100">
                     <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                        <CardTitle className="text-sm font-medium">Completed</CardTitle>
+                        <CardTitle className="text-sm font-medium text-slate-600">Completed</CardTitle>
                         <CheckCircle2 className="w-4 h-4 text-green-500" />
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold text-green-600">{doneCount}</div>
                         <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden mt-2">
-                            <div className="h-full bg-green-500 transition-all duration-500" style={{ width: `${Math.round((doneCount / (students.length || 1)) * 100)}%` }} />
+                            <div className="h-full bg-green-500 transition-all duration-1000 ease-out" style={{ width: `${Math.round((doneCount / (students.length || 1)) * 100)}%` }} />
                         </div>
                         <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-wider">{Math.round((doneCount / (students.length || 1)) * 100)}% of workload</p>
                     </CardContent>
                 </Card>
-                <Card className="print:hidden">
+                <Card className="print:hidden hover:-translate-y-1 hover:shadow-lg transition-all duration-300 cursor-default border-amber-100">
                     <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                        <CardTitle className="text-sm font-medium">Remaining</CardTitle>
+                        <CardTitle className="text-sm font-medium text-slate-600">Remaining</CardTitle>
                         <Circle className="w-4 h-4 text-amber-500" />
                     </CardHeader>
                     <CardContent>
@@ -295,7 +295,7 @@ export default function AdvisorDashboard() {
             )}
 
             {/* Student Table */}
-            <Card>
+            <Card className="print:shadow-none print:border-none print:m-0 print:p-0">
                 <CardHeader className="print:hidden">
                     <div className="flex items-center justify-between">
                         <div>
@@ -334,8 +334,8 @@ export default function AdvisorDashboard() {
                         </div>
                     </div>
                 </CardHeader>
-                <CardContent>
-                    <Table>
+                <CardContent className="print:p-0 print:overflow-visible">
+                    <Table className="print:w-full print:text-sm">
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Student ID</TableHead>
