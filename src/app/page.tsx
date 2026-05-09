@@ -115,10 +115,15 @@ export default function StudentHub() {
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                     {/* Sections */}
                     <div className="lg:col-span-8 space-y-4">
-                        <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                            <Users className="w-5 h-5 text-blue-600" /> Live Section Status
-                            <span className="text-sm font-normal text-slate-400">(click to view students)</span>
-                        </h2>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                                <Users className="w-5 h-5 text-blue-600" /> Live Section Status
+                                <span className="text-sm font-normal text-slate-400 hidden sm:inline">(click to view students)</span>
+                            </h2>
+                            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 w-fit px-3 py-1">
+                                <span className="font-bold mr-1">{sections.reduce((sum, sec) => sum + sec.current, 0)}</span> Students Registered
+                            </Badge>
+                        </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {sections.map(sec => {
                                 const pct = Math.round((sec.current / sec.capacity) * 100);
