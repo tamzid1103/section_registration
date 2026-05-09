@@ -366,7 +366,7 @@ export default function AdvisorDashboard() {
                                                 <Users className="w-5 h-5" /> CR Directory
                                             </DialogTitle>
                                             <DialogDescription>
-                                                List of all approved Class Representatives in the system. Click their email to send a message.
+                                                List of all Class Representatives in the system. Click their email to send a message.
                                             </DialogDescription>
                                         </DialogHeader>
                                         <div className="grid gap-3 mt-4">
