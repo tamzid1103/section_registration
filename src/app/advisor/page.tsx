@@ -11,6 +11,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Users, Search, CheckCircle2, Circle, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -31,6 +32,7 @@ export default function AdvisorDashboard() {
     const [students, setStudents] = useState<Student[]>([]);
     const [advisorInfo, setAdvisorInfo] = useState<{ name: string; ranges: any[] } | null>(null);
     const [searchQuery, setSearchQuery] = useState("");
+    const [sortBy, setSortBy] = useState("id");
     const [toggling, setToggling] = useState<string | null>(null);
     const [savingNote, setSavingNote] = useState<string | null>(null);
     const router = useRouter();
@@ -128,6 +130,15 @@ export default function AdvisorDashboard() {
         s.student_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
         s.student_name.toLowerCase().includes(searchQuery.toLowerCase())
     );
+
+    const sorted = [...filtered].sort((a, b) => {
+        if (sortBy === "id") return a.student_id.localeCompare(b.student_id);
+        if (sortBy === "section") return a.section_name.localeCompare(b.section_name);
+        if (sortBy === "done") return Number(b.advisor_completed) - Number(a.advisor_completed);
+        if (sortBy === "pending") return Number(a.advisor_completed) - Number(b.advisor_completed);
+        return 0;
+    });
+
     const doneCount = students.filter(s => s.advisor_completed).length;
 
     if (loading) return <div className="p-10 text-center text-muted-foreground">Loading advisor console...</div>;
@@ -202,14 +213,27 @@ export default function AdvisorDashboard() {
                             <CardTitle>Student List</CardTitle>
                             <CardDescription>Mark each student when their advising is done.</CardDescription>
                         </div>
-                        <div className="relative w-56">
-                            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                placeholder="Search by ID or Name"
-                                className="pl-8"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                            />
+                        <div className="flex items-center gap-3">
+                            <div className="relative w-56">
+                                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    placeholder="Search by ID or Name"
+                                    className="pl-8"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                />
+                            </div>
+                            <Select value={sortBy} onValueChange={setSortBy}>
+                                <SelectTrigger className="w-[160px]">
+                                    <SelectValue placeholder="Sort by" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="id">Student ID</SelectItem>
+                                    <SelectItem value="section">Section</SelectItem>
+                                    <SelectItem value="done">Completed First</SelectItem>
+                                    <SelectItem value="pending">Pending First</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
                     </div>
                 </CardHeader>
@@ -227,7 +251,7 @@ export default function AdvisorDashboard() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {filtered.map((s) => (
+                            {sorted.map((s) => (
                                 <TableRow
                                     key={s.id}
                                     className={s.advisor_completed ? "bg-green-50/60" : ""}
@@ -273,7 +297,7 @@ export default function AdvisorDashboard() {
                                     </TableCell>
                                 </TableRow>
                             ))}
-                            {filtered.length === 0 && (
+                            {sorted.length === 0 && (
                                 <TableRow>
                                     <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
                                         No students found.

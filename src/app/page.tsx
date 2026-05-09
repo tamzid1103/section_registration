@@ -221,6 +221,12 @@ export default function StudentHub() {
                                                     </div>
                                                 </div>
                                             </div>
+                                            {reg.advisor_note && (
+                                                <div className="mt-4 bg-amber-50 border border-amber-200 rounded-lg p-3 shadow-sm">
+                                                    <p className="text-[10px] font-bold text-amber-600 uppercase mb-1">Note from Advisor</p>
+                                                    <p className="text-sm text-slate-700 font-medium">"{reg.advisor_note}"</p>
+                                                </div>
+                                            )}
                                         </CardContent>
                                     </Card>
                                 )) : (
