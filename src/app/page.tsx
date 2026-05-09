@@ -121,7 +121,7 @@ export default function StudentHub() {
                                 <span className="text-sm font-normal text-slate-400 hidden sm:inline">(click to view students)</span>
                             </h2>
                             <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 w-fit px-3 py-1">
-                                <span className="font-bold mr-1">{sections.reduce((sum, sec) => sum + sec.current, 0)}</span> Students Registered
+                                <span className="font-bold mr-1">{sections.reduce((sum, sec) => sum + sec.current, 0)}</span> Students Enlisted
                             </Badge>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

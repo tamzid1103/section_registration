@@ -12,7 +12,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Users, Search, CheckCircle2, Circle, LogOut, Download, Printer, AlertTriangle } from "lucide-react";
+import {
+    Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription
+} from "@/components/ui/dialog";
+import { Users, Search, CheckCircle2, Circle, LogOut, Download, Printer, AlertTriangle, BookOpen, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
@@ -35,11 +38,19 @@ export default function AdvisorDashboard() {
     const [sortBy, setSortBy] = useState("id");
     const [toggling, setToggling] = useState<string | null>(null);
     const [savingNote, setSavingNote] = useState<string | null>(null);
+    const [showMissing, setShowMissing] = useState(false);
+    const [crs, setCrs] = useState<any[]>([]);
     const router = useRouter();
 
     useEffect(() => {
         fetchAdvisorData();
+        fetchCRs();
     }, []);
+
+    async function fetchCRs() {
+        const { data } = await supabase.from("cr_applications").select("*").eq("status", "approved");
+        if (data) setCrs(data);
+    }
 
     async function fetchAdvisorData() {
         const { data: { user } } = await supabase.auth.getUser();
@@ -232,66 +243,85 @@ export default function AdvisorDashboard() {
 
             {/* Stats */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card className="print:hidden hover:-translate-y-1 hover:shadow-lg transition-all duration-300 cursor-default">
+                <Card className="print:hidden hover:-translate-y-1 hover:shadow-lg transition-all duration-300 cursor-default border-blue-200 bg-gradient-to-br from-blue-50 to-white">
                     <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                        <CardTitle className="text-sm font-medium text-slate-600">Total Students</CardTitle>
-                        <Users className="w-4 h-4 text-blue-500" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-slate-900">{students.length}</div>
-                    </CardContent>
-                </Card>
-                <Card className="print:hidden hover:-translate-y-1 hover:shadow-lg transition-all duration-300 cursor-default border-green-100">
-                    <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                        <CardTitle className="text-sm font-medium text-slate-600">Completed</CardTitle>
-                        <CheckCircle2 className="w-4 h-4 text-green-500" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-green-600">{doneCount}</div>
-                        <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden mt-2">
-                            <div className="h-full bg-green-500 transition-all duration-1000 ease-out" style={{ width: `${Math.round((doneCount / (students.length || 1)) * 100)}%` }} />
+                        <CardTitle className="text-sm font-bold text-blue-800">Total Students</CardTitle>
+                        <div className="p-2 bg-blue-100 rounded-full">
+                            <Users className="w-4 h-4 text-blue-600" />
                         </div>
-                        <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-wider">{Math.round((doneCount / (students.length || 1)) * 100)}% of workload</p>
-                    </CardContent>
-                </Card>
-                <Card className="print:hidden hover:-translate-y-1 hover:shadow-lg transition-all duration-300 cursor-default border-amber-100">
-                    <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                        <CardTitle className="text-sm font-medium text-slate-600">Remaining</CardTitle>
-                        <Circle className="w-4 h-4 text-amber-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-amber-600">{students.length - doneCount}</div>
+                        <div className="text-3xl font-black text-blue-900">{students.length}</div>
+                        <p className="text-[10px] font-bold text-blue-400 mt-1 uppercase tracking-wider">Assigned to you</p>
+                    </CardContent>
+                </Card>
+                <Card className="print:hidden hover:-translate-y-1 hover:shadow-lg transition-all duration-300 cursor-default border-green-200 bg-gradient-to-br from-green-50 to-white">
+                    <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                        <CardTitle className="text-sm font-bold text-green-800">Completed</CardTitle>
+                        <div className="p-2 bg-green-100 rounded-full">
+                            <CheckCircle2 className="w-4 h-4 text-green-600" />
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-3xl font-black text-green-700">{doneCount}</div>
+                        <div className="w-full bg-green-100 h-2.5 rounded-full overflow-hidden mt-2 shadow-inner">
+                            <div className="h-full bg-green-500 transition-all duration-1000 ease-out relative" style={{ width: `${Math.round((doneCount / (students.length || 1)) * 100)}%` }}>
+                                <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
+                            </div>
+                        </div>
+                        <p className="text-[10px] font-bold text-green-600 mt-1.5 uppercase tracking-wider">{Math.round((doneCount / (students.length || 1)) * 100)}% of workload done</p>
+                    </CardContent>
+                </Card>
+                <Card className="print:hidden hover:-translate-y-1 hover:shadow-lg transition-all duration-300 cursor-default border-amber-200 bg-gradient-to-br from-amber-50 to-white">
+                    <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                        <CardTitle className="text-sm font-bold text-amber-800">Remaining</CardTitle>
+                        <div className="p-2 bg-amber-100 rounded-full">
+                            <Circle className="w-4 h-4 text-amber-600" />
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-3xl font-black text-amber-700">{students.length - doneCount}</div>
+                        <p className="text-[10px] font-bold text-amber-500 mt-1 uppercase tracking-wider">Needs your attention</p>
                     </CardContent>
                 </Card>
             </div>
 
             {/* Missing Students Alert */}
             {missingStudents.length > 0 && (
-                <Card className="border-red-200 bg-red-50/50 print:hidden shadow-sm">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-red-700 flex items-center gap-2 text-base">
-                            <AlertTriangle className="w-5 h-5" />
-                            Missing Students
-                        </CardTitle>
-                        <CardDescription className="text-red-600/80">
-                            {missingStudents.length} students in your assigned range have not registered yet.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="flex flex-wrap gap-2">
-                            {missingStudents.slice(0, 30).map(id => (
-                                <Badge key={id} variant="outline" className="bg-white text-red-600 border-red-200 font-mono">
-                                    {id}
-                                </Badge>
-                            ))}
-                            {missingStudents.length > 30 && (
-                                <Badge variant="outline" className="bg-transparent text-red-600 border-none font-medium">
-                                    + {missingStudents.length - 30} more
-                                </Badge>
-                            )}
-                        </div>
-                    </CardContent>
-                </Card>
+                <div className="print:hidden">
+                    <Button 
+                        variant="outline" 
+                        className={`w-full justify-between border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800 transition-all ${showMissing ? 'bg-red-50 rounded-b-none border-b-transparent' : 'bg-red-50/50 shadow-sm'}`}
+                        onClick={() => setShowMissing(!showMissing)}
+                    >
+                        <span className="flex items-center gap-2 font-semibold">
+                            <AlertTriangle className="w-5 h-5" /> 
+                            {missingStudents.length} students in your range are missing
+                        </span>
+                        <span className="text-sm bg-white px-3 py-1 rounded-full border border-red-100 shadow-sm">
+                            {showMissing ? 'Hide List' : 'View List'}
+                        </span>
+                    </Button>
+                    
+                    {showMissing && (
+                        <Card className="border-red-200 border-t-0 rounded-t-none bg-red-50/30 shadow-inner">
+                            <CardContent className="pt-4 pb-5">
+                                <div className="flex flex-wrap gap-2">
+                                    {missingStudents.slice(0, 50).map(id => (
+                                        <Badge key={id} variant="outline" className="bg-white text-red-600 border-red-200 font-mono py-1 px-2 shadow-sm">
+                                            {id}
+                                        </Badge>
+                                    ))}
+                                    {missingStudents.length > 50 && (
+                                        <Badge variant="outline" className="bg-transparent text-red-600 border-none font-medium">
+                                            + {missingStudents.length - 50} more
+                                        </Badge>
+                                    )}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+                </div>
             )}
 
             {/* Student Table */}
@@ -307,14 +337,14 @@ export default function AdvisorDashboard() {
                                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                                 <Input
                                     placeholder="Search by ID or Name"
-                                    className="pl-8"
+                                    className="pl-8 bg-slate-50 border-slate-200 focus-visible:ring-blue-500 transition-all focus:bg-white hover:bg-slate-100/50"
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                 />
                             </div>
                             <div className="flex flex-wrap items-center gap-2">
                                 <Select value={sortBy} onValueChange={setSortBy}>
-                                    <SelectTrigger className="w-[140px]">
+                                    <SelectTrigger className="w-[140px] bg-slate-50 border-slate-200 focus:ring-blue-500 transition-all hover:bg-white">
                                         <SelectValue placeholder="Sort by" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -324,11 +354,54 @@ export default function AdvisorDashboard() {
                                         <SelectItem value="pending">Pending First</SelectItem>
                                     </SelectContent>
                                 </Select>
-                                <Button variant="outline" className="gap-2" onClick={exportToCSV}>
+                                <Dialog>
+                                    <DialogTrigger asChild>
+                                        <Button variant="outline" className="gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50 hover:text-indigo-800 transition-colors bg-indigo-50/30">
+                                            <BookOpen className="w-4 h-4" /> <span className="hidden sm:inline">Contact CRs</span>
+                                        </Button>
+                                    </DialogTrigger>
+                                    <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                                        <DialogHeader>
+                                            <DialogTitle className="text-xl flex items-center gap-2 text-indigo-700">
+                                                <Users className="w-5 h-5" /> CR Directory
+                                            </DialogTitle>
+                                            <DialogDescription>
+                                                List of all approved Class Representatives in the system. Click their email to send a message.
+                                            </DialogDescription>
+                                        </DialogHeader>
+                                        <div className="grid gap-3 mt-4">
+                                            {crs.length === 0 ? (
+                                                <div className="text-center p-6 text-slate-500 bg-slate-50 rounded-lg border border-dashed">
+                                                    No approved CRs found in the system.
+                                                </div>
+                                            ) : (
+                                                crs.map((cr) => (
+                                                    <div key={cr.id} className="flex items-center justify-between p-4 border rounded-lg bg-white shadow-sm hover:shadow-md transition-shadow">
+                                                        <div>
+                                                            <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                                                                {cr.full_name} 
+                                                                <Badge variant="secondary" className="bg-blue-50 text-blue-700">Sec {cr.section_interested}</Badge>
+                                                            </h3>
+                                                            <p className="text-sm text-slate-500 mt-1 font-mono">ID: {cr.student_id}</p>
+                                                        </div>
+                                                        <a 
+                                                            href={`mailto:${cr.email}`}
+                                                            className="flex items-center gap-2 text-sm px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-colors font-medium"
+                                                        >
+                                                            <Mail className="w-4 h-4" />
+                                                            Email CR
+                                                        </a>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                    </DialogContent>
+                                </Dialog>
+                                <Button variant="outline" className="gap-2 border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800 transition-colors bg-blue-50/30" onClick={exportToCSV}>
                                     <Download className="w-4 h-4" /> <span className="hidden sm:inline">Export CSV</span>
                                 </Button>
-                                <Button variant="outline" className="gap-2" onClick={() => window.print()}>
-                                    <Printer className="w-4 h-4" /> <span className="hidden sm:inline">Print</span>
+                                <Button variant="outline" className="gap-2 border-slate-200 text-slate-700 hover:bg-slate-100 transition-colors bg-slate-50/50" onClick={() => window.print()}>
+                                    <Printer className="w-4 h-4" /> <span className="hidden sm:inline">Print PDF</span>
                                 </Button>
                             </div>
                         </div>
@@ -336,15 +409,15 @@ export default function AdvisorDashboard() {
                 </CardHeader>
                 <CardContent className="print:p-0 print:overflow-visible">
                     <Table className="print:w-full print:text-sm">
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Student ID</TableHead>
-                                <TableHead>Full Name</TableHead>
-                                <TableHead>Section</TableHead>
-                                <TableHead>Lab Group</TableHead>
-                                <TableHead>Date</TableHead>
-                                <TableHead>Note</TableHead>
-                                <TableHead className="text-right print:hidden">Action</TableHead>
+                        <TableHeader className="bg-slate-50/80 border-b border-slate-200 print:bg-transparent">
+                            <TableRow className="hover:bg-transparent">
+                                <TableHead className="font-bold text-slate-700 print:text-black print:font-bold">Student ID</TableHead>
+                                <TableHead className="font-bold text-slate-700 print:text-black print:font-bold">Full Name</TableHead>
+                                <TableHead className="font-bold text-slate-700 print:text-black print:font-bold">Section</TableHead>
+                                <TableHead className="font-bold text-slate-700 print:text-black print:font-bold">Lab Group</TableHead>
+                                <TableHead className="font-bold text-slate-700 print:text-black print:font-bold">Date</TableHead>
+                                <TableHead className="font-bold text-slate-700 print:text-black print:font-bold">Note</TableHead>
+                                <TableHead className="text-right font-bold text-slate-700 print:hidden">Action</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>

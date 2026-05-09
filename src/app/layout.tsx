@@ -35,7 +35,7 @@ export default function RootLayout({
         <main className="flex-1">
           {children}
         </main>
-        <footer className="py-8 text-center text-sm text-slate-500 bg-white border-t mt-auto w-full space-y-1">
+        <footer className="py-8 text-center text-sm text-slate-500 bg-white border-t mt-auto w-full space-y-1 print:hidden">
           <p className="font-medium text-slate-600">Developed & Maintained by</p>
           <p className="font-bold text-slate-800 text-base">Tamzidul Haque</p>
           <p className="text-slate-500">CSE, Daffodil International University</p>

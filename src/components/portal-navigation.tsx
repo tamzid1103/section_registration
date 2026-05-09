@@ -77,7 +77,7 @@ export function PortalNavigation() {
     const navLinks = links[role] || []
 
     return (
-        <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b shadow-sm">
+        <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b shadow-sm print:hidden">
             <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
                 <Link href="/" className="flex items-center gap-1.5 font-bold text-blue-700 text-sm shrink-0">
                     <Home className="w-4 h-4" /> DIU Pre-Reg
