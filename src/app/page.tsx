@@ -1,14 +1,29 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { allowedDomains, developerAllowlist } from "@/lib/auth-constants";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Search, Loader2, BookOpen, GraduationCap, Users, CheckCircle2, LogIn, LayoutDashboard, ArrowUp } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog";
+import { Search, Loader2, BookOpen, GraduationCap, Users, CheckCircle2, LogIn, LayoutDashboard, ArrowUp, InfoIcon, KeyRound, User, Shield } from "lucide-react";
 import Link from "next/link";
 
+type Mode = "login" | "register";
+type RegisterRole = "cr" | "advisor";
+
 export default function StudentHub() {
+    const router = useRouter();
     const [query, setQuery] = useState("");
     const [results, setResults] = useState<any[]>([]);
     const [sections, setSections] = useState<any[]>([]);
@@ -17,6 +32,17 @@ export default function StudentHub() {
     const [userRole, setUserRole] = useState<string | null>(null);
     const [dashboardUrl, setDashboardUrl] = useState("/auth/login");
     const [showScrollTop, setShowScrollTop] = useState(false);
+
+    const [authOpen, setAuthOpen] = useState(false);
+    const [authMode, setAuthMode] = useState<Mode>("login");
+    const [registerRole, setRegisterRole] = useState<RegisterRole>("cr");
+    const [authLoading, setAuthLoading] = useState(false);
+    const [authError, setAuthError] = useState<string | null>(null);
+    const [authEmail, setAuthEmail] = useState("");
+    const [authPassword, setAuthPassword] = useState("");
+    const [authFullName, setAuthFullName] = useState("");
+    const [authStudentId, setAuthStudentId] = useState("");
+    const [authSectionInterested, setAuthSectionInterested] = useState("");
 
     useEffect(() => {
         fetchData();
@@ -38,6 +64,177 @@ export default function StudentHub() {
             .subscribe();
         return () => { supabase.removeChannel(channel); };
     }, []);
+
+    const isDeveloper = (email: string) => developerAllowlist.includes(email.trim().toLowerCase());
+    const isAllowedDomain = (email: string) => {
+        const domain = email.split("@")[1]?.toLowerCase() || "";
+        return allowedDomains.includes(domain);
+    };
+
+    const redirectByRole = async (userEmail: string) => {
+        try {
+            const { data, error: qErr } = await supabase
+                .from("authorized_staff")
+                .select("role")
+                .eq("email", userEmail)
+                .maybeSingle();
+
+            if (qErr) throw qErr;
+
+            if (data?.role === "developer") { router.push("/developer"); return; }
+            if (data?.role === "admin") { router.push("/admin"); return; }
+            if (data?.role === "advisor") { router.push("/advisor"); return; }
+            if (data?.role === "cr") { router.push("/cr/manage"); return; }
+
+            const { data: advisorRec } = await supabase
+                .from("advisors")
+                .select("id, name")
+                .eq("email", userEmail)
+                .maybeSingle();
+
+            if (advisorRec) {
+                await supabase.from("authorized_staff").insert({
+                    email: userEmail,
+                    role: "advisor",
+                    name: advisorRec.name,
+                });
+                router.push("/advisor");
+                return;
+            }
+
+            const { data: pending } = await supabase
+                .from("cr_applications")
+                .select("id")
+                .eq("email", userEmail)
+                .eq("status", "pending")
+                .maybeSingle();
+
+            if (pending) { router.push("/auth/pending?type=cr"); return; }
+            router.push("/auth/unauthorized");
+        } catch (err: any) {
+            setAuthError("Login succeeded but role lookup failed: " + (err?.message || String(err)));
+        }
+    };
+
+    const handleLogin = async () => {
+        setAuthLoading(true);
+        setAuthError(null);
+
+        const trimmedEmail = authEmail.trim().toLowerCase();
+        if (!trimmedEmail || !authPassword) {
+            setAuthError("Email and password are required.");
+            setAuthLoading(false);
+            return;
+        }
+
+        if (!isAllowedDomain(trimmedEmail) && !isDeveloper(trimmedEmail)) {
+            setAuthError("Only DIU university emails are allowed to login.");
+            setAuthLoading(false);
+            return;
+        }
+
+        try {
+            const { error: authErr } = await supabase.auth.signInWithPassword({
+                email: trimmedEmail,
+                password: authPassword,
+            });
+
+            if (authErr) {
+                setAuthError(authErr.message);
+                return;
+            }
+
+            await redirectByRole(trimmedEmail);
+            setAuthOpen(false);
+        } catch (err: any) {
+            setAuthError("Unexpected error: " + (err?.message || String(err)));
+        } finally {
+            setAuthLoading(false);
+        }
+    };
+
+    const handleRegister = async () => {
+        setAuthLoading(true);
+        setAuthError(null);
+
+        const trimmedEmail = authEmail.trim().toLowerCase();
+        if (!trimmedEmail || !authPassword || !authFullName) {
+            setAuthError("Full name, email, and password are required.");
+            setAuthLoading(false);
+            return;
+        }
+        if (isDeveloper(trimmedEmail)) {
+            setAuthError("Developer accounts cannot be self-registered. Use the login form.");
+            setAuthLoading(false);
+            return;
+        }
+        if (!isAllowedDomain(trimmedEmail)) {
+            setAuthError("Only DIU university emails (@diu.edu.bd or @daffodilvarsity.edu.bd) can register.");
+            setAuthLoading(false);
+            return;
+        }
+        if (registerRole === "cr" && (!authStudentId || !authSectionInterested)) {
+            setAuthError("Student ID and section are required for CR registration.");
+            setAuthLoading(false);
+            return;
+        }
+
+        try {
+            const res = await fetch("/api/auth/register", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    type: registerRole,
+                    email: trimmedEmail,
+                    password: authPassword,
+                    fullName: authFullName,
+                    studentId: authStudentId,
+                    sectionInterested: authSectionInterested,
+                }),
+            });
+
+            const json = await res.json();
+
+            if (!res.ok || json.error) {
+                setAuthError(json.error || "Registration failed. Please try again.");
+                return;
+            }
+
+            if (registerRole === "advisor") {
+                const { error: signInErr } = await supabase.auth.signInWithPassword({
+                    email: trimmedEmail,
+                    password: authPassword,
+                });
+                if (signInErr) {
+                    setAuthError("Account created! Please login now.");
+                    return;
+                }
+                router.push("/advisor");
+            } else {
+                router.push(json.redirect || "/auth/pending?type=cr");
+            }
+
+            setAuthOpen(false);
+        } catch (err: any) {
+            setAuthError("Network error: " + (err?.message || String(err)));
+        } finally {
+            setAuthLoading(false);
+        }
+    };
+
+    const toggleAuthMode = () => {
+        setAuthMode(authMode === "login" ? "register" : "login");
+        setAuthError(null);
+    };
+
+    const handleAuthSubmit = async (event: React.FormEvent) => {
+        event.preventDefault();
+        if (authMode === "login") {
+            await handleLogin();
+            return;
+        }
+        await handleRegister();
+    };
 
     async function fetchData() {
         const { data: secs } = await supabase
@@ -193,10 +390,163 @@ export default function StudentHub() {
                             <LayoutDashboard className="w-4 h-4" /> Dashboard
                         </Link>
                     ) : (
-                        <Link href="/auth/login"
-                            className="flex items-center gap-1.5 text-blue-100 hover:text-white text-sm border border-blue-300 hover:border-white rounded-lg px-3 py-1.5 transition-colors">
-                            <LogIn className="w-4 h-4" /> Staff Login
-                        </Link>
+                        <Dialog open={authOpen} onOpenChange={setAuthOpen}>
+                            <DialogTrigger asChild>
+                                <button
+                                    type="button"
+                                    onClick={() => setAuthMode("login")}
+                                    className="flex items-center gap-1.5 text-blue-100 hover:text-white text-sm border border-blue-300 hover:border-white rounded-lg px-3 py-1.5 transition-colors"
+                                >
+                                    <LogIn className="w-4 h-4" /> Staff Login
+                                </button>
+                            </DialogTrigger>
+                            <DialogContent className="w-[calc(100%-2rem)] sm:max-w-lg md:max-w-xl lg:max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl p-5 sm:p-6 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95 data-[state=open]:slide-in-from-top-8 data-[state=closed]:slide-out-to-top-6">
+                                <DialogHeader>
+                                    <div className="mx-auto mb-3 w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center">
+                                        <GraduationCap className="w-7 h-7 text-white" />
+                                    </div>
+                                    <DialogTitle className="text-center text-2xl font-bold tracking-tight">
+                                        {authMode === "login" ? "Portal Login" : "Create Account"}
+                                    </DialogTitle>
+                                    <DialogDescription className="text-center">
+                                        {authMode === "login"
+                                            ? "Login with your university email"
+                                            : "Register as a CR or Advisor using your DIU email"}
+                                    </DialogDescription>
+                                </DialogHeader>
+
+                                <form className="space-y-4" onSubmit={handleAuthSubmit}>
+                                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex gap-3 text-blue-800 text-sm">
+                                        <InfoIcon className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                                        <p>Students do not need an account — use the search on the home page.</p>
+                                    </div>
+
+                                    {authMode === "register" && (
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => setRegisterRole("cr")}
+                                                className={`flex flex-col items-center gap-1 p-3 rounded-xl border-2 text-sm font-semibold transition-all ${registerRole === "cr"
+                                                    ? "border-blue-600 bg-blue-50 text-blue-700 shadow-sm"
+                                                    : "border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50"
+                                                    }`}
+                                            >
+                                                <Shield className="w-5 h-5" />
+                                                Apply as CR
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setRegisterRole("advisor")}
+                                                className={`flex flex-col items-center gap-1 p-3 rounded-xl border-2 text-sm font-semibold transition-all ${registerRole === "advisor"
+                                                    ? "border-blue-600 bg-blue-50 text-blue-700 shadow-sm"
+                                                    : "border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50"
+                                                    }`}
+                                            >
+                                                <User className="w-5 h-5" />
+                                                Register as Advisor
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {authMode === "register" && (
+                                        <div className={`text-xs rounded-lg p-3 border ${registerRole === "cr"
+                                            ? "bg-amber-50 border-amber-200 text-amber-800"
+                                            : "bg-green-50 border-green-200 text-green-800"
+                                            }`}>
+                                            {registerRole === "cr"
+                                                ? "CR applications require admin approval before access is granted."
+                                                : "Advisor accounts are auto-approved if your email is registered in the system."}
+                                        </div>
+                                    )}
+
+                                    {authMode === "register" && (
+                                        <div className="space-y-1.5">
+                                            <label className="text-sm font-medium">Full Name</label>
+                                            <Input
+                                                placeholder="Your full name"
+                                                value={authFullName}
+                                                onChange={(e) => setAuthFullName(e.target.value)}
+                                            />
+                                        </div>
+                                    )}
+
+                                    <div className="space-y-1.5">
+                                        <label className="text-sm font-medium">Email</label>
+                                        <Input
+                                            type="email"
+                                            placeholder={authMode === "register" ? "name@diu.edu.bd" : "Enter your email"}
+                                            value={authEmail}
+                                            onChange={(e) => setAuthEmail(e.target.value)}
+                                        />
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                        <label className="text-sm font-medium">Password</label>
+                                        <Input
+                                            type="password"
+                                            placeholder="Enter your password"
+                                            value={authPassword}
+                                            onChange={(e) => setAuthPassword(e.target.value)}
+                                        />
+                                    </div>
+
+                                    {authMode === "register" && registerRole === "cr" && (
+                                        <>
+                                            <div className="space-y-1.5">
+                                                <label className="text-sm font-medium">Your Student ID</label>
+                                                <Input
+                                                    placeholder="241-15-877"
+                                                    value={authStudentId}
+                                                    onChange={(e) => setAuthStudentId(e.target.value)}
+                                                />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <label className="text-sm font-medium">Section You Want to Manage</label>
+                                                <Input
+                                                    placeholder="e.g. 66_A"
+                                                    value={authSectionInterested}
+                                                    onChange={(e) => setAuthSectionInterested(e.target.value)}
+                                                />
+                                            </div>
+                                        </>
+                                    )}
+
+                                    {authError && (
+                                        <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                                            <p className="text-sm text-red-700 font-medium">{authError}</p>
+                                        </div>
+                                    )}
+
+                                    <Button className="w-full h-11 gap-2 text-base" type="submit" disabled={authLoading}>
+                                        {authLoading
+                                            ? "Processing..."
+                                            : authMode === "login"
+                                                ? <><KeyRound className="w-4 h-4" /> Login</>
+                                                : <><User className="w-4 h-4" /> Create Account</>
+                                        }
+                                    </Button>
+
+                                    {authMode === "login" && (
+                                        <Link
+                                            href="/auth/forgot-password"
+                                            className="block text-center text-sm font-medium text-blue-700 hover:text-blue-800 hover:underline"
+                                        >
+                                            Forgot your password?
+                                        </Link>
+                                    )}
+
+                                    <button
+                                        type="button"
+                                        className="w-full rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 transition-all hover:border-blue-300 hover:bg-blue-100"
+                                        onClick={toggleAuthMode}
+                                    >
+                                        {authMode === "login"
+                                            ? "Don't have an account? Register here"
+                                            : "Already have an account? Login"}
+                                    </button>
+                                </form>
+                            </DialogContent>
+                        </Dialog>
                     )}
                     <a href="#advisors"
                         className="flex items-center gap-1.5 text-blue-100 hover:text-white text-sm border border-blue-300 hover:border-white rounded-lg px-3 py-1.5 transition-colors">
