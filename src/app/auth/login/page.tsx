@@ -50,9 +50,9 @@ export default function LoginPage() {
             if (qErr) throw qErr;
 
             if (data?.role === "developer") { router.push("/developer"); return; }
-            if (data?.role === "admin")     { router.push("/admin");     return; }
-            if (data?.role === "advisor")   { router.push("/advisor");   return; }
-            if (data?.role === "cr")        { router.push("/cr/manage"); return; }
+            if (data?.role === "admin") { router.push("/admin"); return; }
+            if (data?.role === "advisor") { router.push("/advisor"); return; }
+            if (data?.role === "cr") { router.push("/cr/manage"); return; }
 
             // Not in authorized_staff — check if they are in advisors table
             const { data: advisorRec } = await supabase
@@ -201,6 +201,15 @@ export default function LoginPage() {
         setError(null);
     };
 
+    const handleSubmit = async (event: React.FormEvent) => {
+        event.preventDefault();
+        if (mode === "login") {
+            await handleLogin();
+            return;
+        }
+        await handleRegister();
+    };
+
     return (
         <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-100 to-blue-50 p-4">
             <Card className="w-full max-w-md shadow-2xl border-t-4 border-blue-600">
@@ -219,141 +228,142 @@ export default function LoginPage() {
                 </CardHeader>
 
                 <CardContent className="space-y-4 pt-4">
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex gap-3 text-blue-800 text-sm">
-                        <InfoIcon className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                        <p>Students do not need an account — use the search on the home page.</p>
-                    </div>
-
-                    {/* Role selector (register mode only) */}
-                    {mode === "register" && (
-                        <div className="grid grid-cols-2 gap-2">
-                            <button
-                                type="button"
-                                onClick={() => setRegisterRole("cr")}
-                                className={`flex flex-col items-center gap-1 p-3 rounded-xl border-2 text-sm font-semibold transition-all ${
-                                    registerRole === "cr"
-                                        ? "border-blue-600 bg-blue-50 text-blue-700"
-                                        : "border-slate-200 text-slate-500 hover:border-slate-300"
-                                }`}
-                            >
-                                <Shield className="w-5 h-5" />
-                                Apply as CR
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setRegisterRole("advisor")}
-                                className={`flex flex-col items-center gap-1 p-3 rounded-xl border-2 text-sm font-semibold transition-all ${
-                                    registerRole === "advisor"
-                                        ? "border-blue-600 bg-blue-50 text-blue-700"
-                                        : "border-slate-200 text-slate-500 hover:border-slate-300"
-                                }`}
-                            >
-                                <User className="w-5 h-5" />
-                                Register as Advisor
-                            </button>
+                    <form className="space-y-4" onSubmit={handleSubmit}>
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex gap-3 text-blue-800 text-sm">
+                            <InfoIcon className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                            <p>Students do not need an account — use the search on the home page.</p>
                         </div>
-                    )}
 
-                    {/* Role info banner */}
-                    {mode === "register" && (
-                        <div className={`text-xs rounded-lg p-3 border ${
-                            registerRole === "cr"
-                                ? "bg-amber-50 border-amber-200 text-amber-800"
-                                : "bg-green-50 border-green-200 text-green-800"
-                        }`}>
-                            {registerRole === "cr"
-                                ? "CR applications require admin approval before access is granted."
-                                : "Advisor accounts are auto-approved if your email is registered in the system."}
-                        </div>
-                    )}
+                        {/* Role selector (register mode only) */}
+                        {mode === "register" && (
+                            <div className="grid grid-cols-2 gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setRegisterRole("cr")}
+                                    className={`flex flex-col items-center gap-1 p-3 rounded-xl border-2 text-sm font-semibold transition-all ${registerRole === "cr"
+                                            ? "border-blue-600 bg-blue-50 text-blue-700 shadow-sm"
+                                            : "border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50"
+                                        }`}
+                                >
+                                    <Shield className="w-5 h-5" />
+                                    Apply as CR
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setRegisterRole("advisor")}
+                                    className={`flex flex-col items-center gap-1 p-3 rounded-xl border-2 text-sm font-semibold transition-all ${registerRole === "advisor"
+                                            ? "border-blue-600 bg-blue-50 text-blue-700 shadow-sm"
+                                            : "border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50"
+                                        }`}
+                                >
+                                    <User className="w-5 h-5" />
+                                    Register as Advisor
+                                </button>
+                            </div>
+                        )}
 
-                    {/* Full Name (register only) */}
-                    {mode === "register" && (
+                        {/* Role info banner */}
+                        {mode === "register" && (
+                            <div className={`text-xs rounded-lg p-3 border ${registerRole === "cr"
+                                    ? "bg-amber-50 border-amber-200 text-amber-800"
+                                    : "bg-green-50 border-green-200 text-green-800"
+                                }`}>
+                                {registerRole === "cr"
+                                    ? "CR applications require admin approval before access is granted."
+                                    : "Advisor accounts are auto-approved if your email is registered in the system."}
+                            </div>
+                        )}
+
+                        {/* Full Name (register only) */}
+                        {mode === "register" && (
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">Full Name</label>
+                                <Input
+                                    placeholder="Your full name"
+                                    value={fullName}
+                                    onChange={(e) => setFullName(e.target.value)}
+                                />
+                            </div>
+                        )}
+
+                        {/* Email */}
                         <div className="space-y-1.5">
-                            <label className="text-sm font-medium">Full Name</label>
+                            <label className="text-sm font-medium">Email</label>
                             <Input
-                                placeholder="Your full name"
-                                value={fullName}
-                                onChange={(e) => setFullName(e.target.value)}
+                                type="email"
+                                placeholder={mode === "register" ? "name@diu.edu.bd" : "Enter your email"}
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
                             />
                         </div>
-                    )}
 
-                    {/* Email */}
-                    <div className="space-y-1.5">
-                        <label className="text-sm font-medium">Email</label>
-                        <Input
-                            type="email"
-                            placeholder={mode === "register" ? "name@diu.edu.bd" : "Enter your email"}
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                        />
-                    </div>
-
-                    {/* Password */}
-                    <div className="space-y-1.5">
-                        <div className="flex items-center justify-between">
+                        {/* Password */}
+                        <div className="space-y-1.5">
                             <label className="text-sm font-medium">Password</label>
-                            {mode === "login" && (
-                                <Link href="/auth/forgot-password" className="text-xs text-blue-600 hover:underline">
-                                    Forgot password?
-                                </Link>
-                            )}
+                            <Input
+                                type="password"
+                                placeholder="Enter your password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                            />
                         </div>
-                        <Input
-                            type="password"
-                            placeholder="Enter your password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                        />
-                    </div>
 
-                    {/* CR extra fields */}
-                    {mode === "register" && registerRole === "cr" && (
-                        <>
-                            <div className="space-y-1.5">
-                                <label className="text-sm font-medium">Your Student ID</label>
-                                <Input
-                                    placeholder="241-15-877"
-                                    value={studentId}
-                                    onChange={(e) => setStudentId(e.target.value)}
-                                />
+                        {/* CR extra fields */}
+                        {mode === "register" && registerRole === "cr" && (
+                            <>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Your Student ID</label>
+                                    <Input
+                                        placeholder="241-15-877"
+                                        value={studentId}
+                                        onChange={(e) => setStudentId(e.target.value)}
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Section You Want to Manage</label>
+                                    <Input
+                                        placeholder="e.g. 66_A"
+                                        value={sectionInterested}
+                                        onChange={(e) => setSectionInterested(e.target.value)}
+                                    />
+                                </div>
+                            </>
+                        )}
+
+                        {error && (
+                            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                                <p className="text-sm text-red-700 font-medium">{error}</p>
                             </div>
-                            <div className="space-y-1.5">
-                                <label className="text-sm font-medium">Section You Want to Manage</label>
-                                <Input
-                                    placeholder="e.g. 66_A"
-                                    value={sectionInterested}
-                                    onChange={(e) => setSectionInterested(e.target.value)}
-                                />
-                            </div>
-                        </>
-                    )}
+                        )}
 
-                    {error && (
-                        <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                            <p className="text-sm text-red-700 font-medium">{error}</p>
-                        </div>
-                    )}
+                        <Button
+                            className="w-full h-11 gap-2 text-base"
+                            type="submit"
+                            disabled={loading}
+                        >
+                            {loading
+                                ? "Processing..."
+                                : mode === "login"
+                                    ? <><KeyRound className="w-4 h-4" /> Login</>
+                                    : <><User className="w-4 h-4" /> Create Account</>
+                            }
+                        </Button>
 
-                    <Button
-                        className="w-full h-11 gap-2 text-base"
-                        onClick={mode === "login" ? handleLogin : handleRegister}
-                        disabled={loading}
-                    >
-                        {loading
-                            ? "Processing..."
-                            : mode === "login"
-                                ? <><KeyRound className="w-4 h-4" /> Login</>
-                                : <><User className="w-4 h-4" /> Create Account</>
-                        }
-                    </Button>
+                        {mode === "login" && (
+                            <Link
+                                href="/auth/forgot-password"
+                                className="block text-center text-sm font-medium text-blue-700 hover:text-blue-800 hover:underline"
+                            >
+                                Forgot your password?
+                            </Link>
+                        )}
+                    </form>
                 </CardContent>
 
                 <CardFooter className="flex flex-col gap-2 text-center text-xs text-muted-foreground border-t pt-4">
                     <button
                         type="button"
-                        className="text-blue-600 hover:underline text-sm"
+                        className="w-full rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 transition-all hover:border-blue-300 hover:bg-blue-100"
                         onClick={toggleMode}
                     >
                         {mode === "login"
