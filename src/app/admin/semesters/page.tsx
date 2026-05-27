@@ -183,15 +183,7 @@ export default function AdminSemesters() {
         setActionStatuses((s) => ({ ...s, [semesterId]: { message: 'Clearing auto-lock...', type: 'info' } }))
         try {
             const { error } = await supabase
-                                            <Button size="sm" variant={s.is_locked ? 'outline' : 'destructive'} onClick={() => toggleLock(s.id, s.is_locked)} disabled={!!actionBusy[s.id]}>
-                                                {actionBusy[s.id] ? (s.is_locked ? 'Unlocking…' : 'Locking…') : (s.is_locked ? 'Unlock' : 'Lock')}
-                                            </Button>
             if (error) throw error
-                                        {actionStatuses[s.id] ? (
-                                            <div className={`mt-2 text-xs ${actionStatuses[s.id].type === 'error' ? 'text-destructive' : actionStatuses[s.id].type === 'success' ? 'text-success' : 'text-muted-foreground'}`}>
-                                                {actionStatuses[s.id].message}
-                                            </div>
-                                        ) : null}
             await invalidateCacheScopes(['home', 'admin'])
             fetchSemesters()
             setActionStatuses((s) => ({ ...s, [semesterId]: { message: 'Auto-lock cleared', type: 'success' } }))
