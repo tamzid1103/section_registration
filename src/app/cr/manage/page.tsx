@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
+import { invalidateCacheScopes } from '@/lib/cache/client'
 
 export default function CRManagePage() {
     const supabase = createClient()
@@ -141,6 +142,7 @@ export default function CRManagePage() {
         })
 
         toast.success('Student registered!')
+        await invalidateCacheScopes(['home', 'admin'])
         setFName(''); setFId(''); setFSection(''); setFLab(''); setFNote('')
         setLabGroups([])
         fetchRegistrations()
@@ -159,6 +161,7 @@ export default function CRManagePage() {
             note: `Deleted ${reg.student_name} (${reg.student_id}) from section ${reg.sections?.name}`
         })
         toast.success('Student entry deleted.')
+        await invalidateCacheScopes(['home', 'admin'])
         fetchRegistrations(); fetchAuditLogs()
     }
 
@@ -194,6 +197,7 @@ export default function CRManagePage() {
         })
 
         toast.success('Student updated.')
+        await invalidateCacheScopes(['home', 'admin'])
         setEditReg(null)
         fetchRegistrations(); fetchAuditLogs()
     }
@@ -240,6 +244,7 @@ export default function CRManagePage() {
         }
 
         toast.success(`Import done: ${success} added, ${fail} failed.`)
+        await invalidateCacheScopes(['home', 'admin'])
         if (csvRef.current) csvRef.current.value = ''
         fetchRegistrations()
     }

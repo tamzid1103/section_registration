@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { invalidateCacheScopes } from '@/lib/cache/client'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -26,35 +27,16 @@ export default function AdminDashboard() {
     }, [])
 
     async function fetchAll() {
-        const [semRes, studRes, crRes, pendRes, logRes, advRes, histRes] = await Promise.all([
-            supabase.from('semesters').select('id, name').eq('is_active', true).maybeSingle(),
-            supabase.from('registrations').select('id', { count: 'exact', head: true }),
-            supabase.from('authorized_staff').select('id', { count: 'exact', head: true }).eq('role', 'cr'),
-            supabase.from('cr_applications').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
-            supabase.from('audit_logs').select('*').order('timestamp', { ascending: false }).limit(10),
-            supabase.from('advisors').select('id, name, registrations(id, advisor_completed)'),
-            supabase.from('semesters').select('id, name, is_active').order('created_at', { ascending: false }),
-        ])
+        const response = await fetch('/api/cache/admin-summary', { cache: 'no-store' })
+        if (!response.ok) return
 
-        const semId = semRes.data?.id
-        const { count: secCount } = await supabase.from('sections').select('id', { count: 'exact', head: true }).eq('semester_id', semId || '')
+        const payload = await response.json()
+        const adminData = payload.data || {}
 
-        setStats({
-            totalStudents: studRes.count || 0,
-            activeSemester: semRes.data?.name || 'No Active Semester',
-            sectionsCount: secCount || 0,
-            crCount: crRes.count || 0,
-            pendingApps: pendRes.count || 0,
-        })
-        if (logRes.data) setAuditLogs(logRes.data)
-        if (advRes.data) {
-            setAdvisorProgress(advRes.data.map((a: any) => {
-                const total = a.registrations?.length || 0
-                const done = a.registrations?.filter((r: any) => r.advisor_completed)?.length || 0
-                return { name: a.name, total, done, pct: total > 0 ? Math.round((done / total) * 100) : 0 }
-            }))
-        }
-        if (histRes.data) setSemesterHistory(histRes.data)
+        setStats(adminData.stats || { totalStudents: 0, activeSemester: 'None', sectionsCount: 0, crCount: 0, pendingApps: 0 })
+        setAuditLogs(adminData.auditLogs || [])
+        setAdvisorProgress(adminData.advisorProgress || [])
+        setSemesterHistory(adminData.semesterHistory || [])
     }
 
     function exportAuditCSV() {

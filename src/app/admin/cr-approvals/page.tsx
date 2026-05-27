@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Check, X, Clock, User, Mail, Hash, BookOpen } from 'lucide-react'
+import { invalidateCacheScopes } from '@/lib/cache/client'
 
 export default function AdminCRApprovalPage() {
     const [apps, setApps] = useState<any[]>([])
@@ -57,6 +58,7 @@ export default function AdminCRApprovalPage() {
             }
         }
 
+        await invalidateCacheScopes(['admin'])
         fetchApps()
     }
 

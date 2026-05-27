@@ -44,10 +44,21 @@ export default function StudentHub() {
     const [authStudentId, setAuthStudentId] = useState("");
     const [authSectionInterested, setAuthSectionInterested] = useState("");
 
+    async function fetchData() {
+        const response = await fetch('/api/cache/home', { cache: 'no-store' })
+        if (!response.ok) return
+
+        const payload = await response.json()
+        const homeData = payload.data || {}
+        setSections(homeData.sections || [])
+        setAdvisors(homeData.advisors || [])
+    }
+
     useEffect(() => {
         fetchData();
         // Check if logged in
-        supabase.auth.getUser().then(({ data: { user } }) => {
+        supabase.auth.getUser().then((res) => {
+            const user = res?.data?.user;
             if (!user?.email) return;
             supabase.from("authorized_staff").select("role").eq("email", user.email).maybeSingle()
                 .then(({ data }) => {
@@ -236,26 +247,6 @@ export default function StudentHub() {
         await handleRegister();
     };
 
-    async function fetchData() {
-        const { data: secs } = await supabase
-            .from("sections")
-            .select("id, name, capacity, semester_id, semesters!inner(name, is_active)")
-            .eq("semesters.is_active", true)
-            .order("name");
-        const { data: regs } = await supabase.from("registrations").select("section_id");
-        const { data: advs } = await supabase.from("advisors")
-            .select("id, name, email, phone, designation, student_advisor_ranges(start_id, end_id)")
-            .order("name");
-
-        if (secs) {
-            setSections(secs.map(s => ({
-                ...s,
-                current: regs?.filter(r => r.section_id === s.id).length || 0
-            })));
-        }
-        if (advs) setAdvisors(advs);
-    }
-
     useEffect(() => {
         const search = async () => {
             if (query.length < 2) { setResults([]); return; }
@@ -300,7 +291,7 @@ export default function StudentHub() {
     const sortedAdvisors = [...advisors].sort((a, b) => {
         const diff = getAdvisorSortKey(a) - getAdvisorSortKey(b);
         if (diff !== 0) return diff;
-        return a.name.localeCompare(b.name);
+        return (a?.name ?? "").localeCompare(b?.name ?? "");
     });
 
     const hasQuery = query.length >= 2;

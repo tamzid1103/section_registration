@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { Plus, Trash2, ChevronLeft, Layers } from 'lucide-react'
 import { toast } from 'sonner'
 import Link from 'next/link'
+import { invalidateCacheScopes } from '@/lib/cache/client'
 
 export default function AdminSections() {
     const [semesters, setSemesters] = useState<any[]>([])
@@ -71,6 +72,7 @@ export default function AdminSections() {
         if (lgErr) { toast.error('Section created but lab groups failed: ' + lgErr.message) }
         else { toast.success(`Section ${newName.trim()} created with lab groups ${lg1} and ${lg2}`) }
 
+        await invalidateCacheScopes(['home', 'admin'])
         setNewName('')
         fetchSections()
     }
@@ -80,7 +82,11 @@ export default function AdminSections() {
 
         const { error } = await supabase.from('sections').delete().eq('id', sectionId)
         if (error) { toast.error(error.message) }
-        else { toast.success('Section deleted.'); fetchSections() }
+        else {
+            toast.success('Section deleted.')
+            await invalidateCacheScopes(['home', 'admin'])
+            fetchSections()
+        }
     }
 
     async function toggleSemesterActive(id: string, current: boolean) {
@@ -89,6 +95,7 @@ export default function AdminSections() {
             await supabase.from('semesters').update({ is_active: false }).neq('id', id)
         }
         await supabase.from('semesters').update({ is_active: !current }).eq('id', id)
+        await invalidateCacheScopes(['home', 'admin'])
         fetchSemesters()
     }
 

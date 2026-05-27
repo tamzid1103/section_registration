@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { Switch } from '@/components/ui/switch'
 import { Plus, Check, X } from 'lucide-react'
+import { invalidateCacheScopes } from '@/lib/cache/client'
 
 export default function AdminSemesters() {
     const [semesters, setSemesters] = useState<any[]>([])
@@ -28,6 +29,7 @@ export default function AdminSemesters() {
         if (!newName) return
         const { error } = await supabase.from('semesters').insert({ name: newName })
         if (!error) {
+            await invalidateCacheScopes(['home', 'admin'])
             setNewName('')
             fetchSemesters()
         }
@@ -44,7 +46,10 @@ export default function AdminSemesters() {
             .update({ is_active: !currentStatus })
             .eq('id', id)
 
-        if (!error) fetchSemesters()
+        if (!error) {
+            await invalidateCacheScopes(['home', 'admin'])
+            fetchSemesters()
+        }
     }
 
     return (

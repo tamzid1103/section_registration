@@ -7,7 +7,7 @@ import Link from "next/link"
 import { LogOut, Bell, Home } from "lucide-react"
 
 export function PortalNavigation() {
-    const pathname = usePathname()
+    const pathname = usePathname() || ""
     const router = useRouter()
     const [role, setRole] = useState<string | null>(null)
     const [staffName, setStaffName] = useState<string | null>(null)
@@ -19,14 +19,17 @@ export function PortalNavigation() {
 
     const fetchRole = useCallback(async () => {
         if (!isPortalPage) return
-        const { data: { user } } = await supabase.auth.getUser()
+        const res = await supabase.auth.getUser()
+        const user = res?.data?.user
         if (!user?.email) return
-        const { data } = await supabase.from('authorized_staff').select('role, name').eq('email', user.email).single()
-        if (data) {
-            setRole(data.role)
-            setStaffName(data.name)
-            if (data.role === 'cr') {
-                const { data: appData } = await supabase.from('cr_applications').select('section_interested').eq('email', user.email).eq('status', 'approved').maybeSingle()
+        const staffRes = await supabase.from('authorized_staff').select('role, name').eq('email', user.email).single()
+        const staffData = staffRes?.data
+        if (staffData) {
+            setRole(staffData.role)
+            setStaffName(staffData.name)
+            if (staffData.role === 'cr') {
+                const appRes = await supabase.from('cr_applications').select('section_interested').eq('email', user.email).eq('status', 'approved').maybeSingle()
+                const appData = appRes?.data
                 if (appData) setCrSection(appData.section_interested)
             }
         }

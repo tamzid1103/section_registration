@@ -34,3 +34,28 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Redis Cache Setup
+
+This project now uses Redis as an optional cache layer for shared read-heavy data.
+
+Required environment variables:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `REDIS_URL`
+
+Use a Redis connection URL from your Redis provider, for example a `rediss://` URL from Redis Cloud.
+
+Cache-backed endpoints:
+
+- `GET /api/cache/home` caches the home page section and advisor data.
+- `GET /api/cache/admin-summary` caches the admin dashboard summary data.
+- `POST /api/cache/invalidate` clears cache keys after writes.
+
+Notes:
+
+- Redis is used only for cache data, not for authentication or authorization.
+- If Redis is unavailable, the app still compiles and the cache routes fall back to direct Supabase reads.
+- Mutation pages clear the cache after section, semester, registration, and CR approval changes so the UI stays fresh.
