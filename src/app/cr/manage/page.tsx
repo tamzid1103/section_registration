@@ -13,7 +13,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import {
     Plus, Trash2, Pencil, CheckCircle2, Circle, Download, Upload,
-    Users, BookOpen, Clock, LogOut
+    Users, BookOpen, Clock, LogOut, Lock
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
@@ -50,13 +50,38 @@ export default function CRManagePage() {
     const [search, setSearch] = useState('')
     const csvRef = useRef<HTMLInputElement>(null)
 
+    const getLockedMessage = (message: string) => {
+        if (message.toLowerCase().includes('semester_locked')) {
+            return 'This semester is locked. CR updates are disabled.'
+        }
+        return message
+    }
+
+    async function fetchActiveSemester() {
+        const { data: sem } = await supabase.from('semesters').select('*').eq('is_active', true).single()
+        setSemester(sem)
+        if (sem) {
+            const { data: secs } = await supabase.from('sections').select('*').eq('semester_id', sem.id).order('name')
+            setSections(secs || [])
+        }
+        return sem
+    }
+
     // ── Init ────────────────────────────────────────────────────────────────
     useEffect(() => {
         init()
-        const ch = supabase.channel('cr-rt')
+        const regCh = supabase.channel('cr-rt')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'registrations' }, () => fetchRegistrations())
             .subscribe()
-        return () => { supabase.removeChannel(ch) }
+
+        const semCh = supabase.channel('cr-sem-rt')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'semesters' }, () => fetchActiveSemester())
+            .subscribe()
+
+        return () => {
+            supabase.removeChannel(regCh)
+            supabase.removeChannel(semCh)
+        }
     }, [])
 
     async function init() {
@@ -66,13 +91,7 @@ export default function CRManagePage() {
         const { data: staff } = await supabase.from('authorized_staff').select('*').eq('email', user.email).single()
         setCrInfo(staff)
 
-        const { data: sem } = await supabase.from('semesters').select('*').eq('is_active', true).single()
-        setSemester(sem)
-
-        if (sem) {
-            const { data: secs } = await supabase.from('sections').select('*').eq('semester_id', sem.id).order('name')
-            setSections(secs || [])
-        }
+        const sem = await fetchActiveSemester()
 
         const { data: advs } = await supabase.from('advisors').select('*, student_advisor_ranges(start_id, end_id, semesters(name))').order('name')
         setAdvisors(advs || [])
@@ -106,6 +125,7 @@ export default function CRManagePage() {
         e.preventDefault()
         if (!fName || !fId || !fSection) { toast.error('Name, ID, and Section are required.'); return }
         if (!crInfo || !semester) { toast.error('No active semester or not authorized.'); return }
+        if (semester?.is_locked) { toast.error('This semester is locked. CR updates are disabled.'); return }
 
         // Auto-lookup advisor
         const numId = parseInt(fId.replace(/-/g, ''))
@@ -128,9 +148,10 @@ export default function CRManagePage() {
         })
 
         if (error) {
-            toast.error(error.message.includes('full') ? error.message :
-                error.message.includes('duplicate') || error.message.includes('unique') ?
-                    `Student ID ${fId} is already registered.` : error.message)
+            const errorMessage = getLockedMessage(error.message)
+            toast.error(errorMessage.includes('full') ? errorMessage :
+                errorMessage.includes('duplicate') || errorMessage.includes('unique') ?
+                    `Student ID ${fId} is already registered.` : errorMessage)
             return
         }
 
@@ -150,10 +171,11 @@ export default function CRManagePage() {
 
     // ── Delete Student ───────────────────────────────────────────────────────
     async function handleDelete(reg: any) {
+        if (semester?.is_locked) { toast.error('This semester is locked. CR updates are disabled.'); return }
         if (!confirm(`Delete ${reg.student_name} (${reg.student_id}) from section ${reg.sections?.name}?`)) return
 
         const { error } = await supabase.from('registrations').delete().eq('id', reg.id)
-        if (error) { toast.error(error.message); return }
+        if (error) { toast.error(getLockedMessage(error.message)); return }
 
         await supabase.from('audit_logs').insert({
             user_id: (await supabase.auth.getUser()).data.user?.id,
@@ -167,6 +189,7 @@ export default function CRManagePage() {
 
     // ── Edit Student ─────────────────────────────────────────────────────────
     async function openEdit(reg: any) {
+        if (semester?.is_locked) { toast.error('This semester is locked. CR updates are disabled.'); return }
         setEditReg(reg)
         setEditSection(reg.section_id)
         setEditNote(reg.note || '')
@@ -184,11 +207,12 @@ export default function CRManagePage() {
 
     async function handleEditSave() {
         if (!editReg) return
+        if (semester?.is_locked) { toast.error('This semester is locked. CR updates are disabled.'); return }
         const { error } = await supabase.from('registrations').update({
             section_id: editSection, lab_group_id: editLab || null, note: editNote.trim()
         }).eq('id', editReg.id)
 
-        if (error) { toast.error(error.message); return }
+        if (error) { toast.error(getLockedMessage(error.message)); return }
 
         await supabase.from('audit_logs').insert({
             user_id: (await supabase.auth.getUser()).data.user?.id,
@@ -206,6 +230,7 @@ export default function CRManagePage() {
     async function handleCSVImport(e: React.ChangeEvent<HTMLInputElement>) {
         const file = e.target.files?.[0]
         if (!file || !semester || !crInfo) return
+        if (semester?.is_locked) { toast.error('This semester is locked. CR updates are disabled.'); return }
         const text = await file.text()
         const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
         const header = lines[0].toLowerCase()
@@ -240,7 +265,14 @@ export default function CRManagePage() {
                 advisor_id: match?.advisor_id || null,
                 entered_by: crInfo.id, note: note || ''
             })
-            if (error) fail++; else success++
+            if (error) {
+                const message = error.message || ''
+                if (message.toLowerCase().includes('semester_locked')) {
+                    toast.error('This semester is locked. CSV import is disabled for CR users.')
+                    break
+                }
+                fail++
+            } else success++
         }
 
         toast.success(`Import done: ${success} added, ${fail} failed.`)
@@ -289,6 +321,17 @@ export default function CRManagePage() {
                     <p className="text-sm text-muted-foreground mt-1">
                         Logged in as: <span className="font-semibold">{crInfo?.name || crInfo?.email}</span>
                         <Badge className="ml-2 text-xs">{crInfo?.role}</Badge>
+                        {semester?.is_locked ? (
+                            <span className="ml-2 inline-flex items-center gap-2 text-xs font-semibold bg-red-600 text-white px-3 py-1 rounded-md shadow-sm">
+                                <Lock className="h-3 w-3" />
+                                Semester Locked
+                            </span>
+                        ) : (
+                            <span className="ml-2 inline-flex items-center gap-2 text-xs font-semibold bg-green-600 text-white px-3 py-1 rounded-md shadow-sm">
+                                <CheckCircle2 className="h-3 w-3" />
+                                Semester Open
+                            </span>
+                        )}
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -350,7 +393,7 @@ export default function CRManagePage() {
                                         </Select>
                                     )}
                                     <Textarea placeholder="Note (Optional)" value={fNote} onChange={e => setFNote(e.target.value)} rows={2} />
-                                    <Button type="submit" className="w-full" disabled={!semester}>
+                                    <Button type="submit" className="w-full" disabled={!semester || semester?.is_locked}>
                                         <Plus className="h-4 w-4 mr-2" /> Register Student
                                     </Button>
                                 </form>
@@ -370,7 +413,7 @@ export default function CRManagePage() {
                                     <Upload className="w-8 h-8 mx-auto text-slate-400 mb-2" />
                                     <p className="text-sm text-muted-foreground mb-3">Upload a CSV file to bulk-register students</p>
                                     <input type="file" accept=".csv" ref={csvRef} onChange={handleCSVImport} className="hidden" />
-                                    <Button variant="outline" onClick={() => csvRef.current?.click()}>Choose CSV File</Button>
+                                    <Button variant="outline" onClick={() => csvRef.current?.click()} disabled={semester?.is_locked}>Choose CSV File</Button>
                                 </div>
                                 <div className="flex gap-2">
                                     <Button variant="outline" className="flex-1 gap-2" onClick={exportCSV}>
@@ -427,10 +470,10 @@ export default function CRManagePage() {
                                                 </TableCell>
                                                 <TableCell className="text-right">
                                                     <div className="flex justify-end gap-1">
-                                                        <Button size="sm" variant="ghost" onClick={() => openEdit(r)}>
+                                                        <Button size="sm" variant="ghost" onClick={() => openEdit(r)} disabled={semester?.is_locked}>
                                                             <Pencil className="h-3.5 w-3.5" />
                                                         </Button>
-                                                        <Button size="sm" variant="ghost" className="text-destructive" onClick={() => handleDelete(r)}>
+                                                        <Button size="sm" variant="ghost" className="text-destructive" onClick={() => handleDelete(r)} disabled={semester?.is_locked}>
                                                             <Trash2 className="h-3.5 w-3.5" />
                                                         </Button>
                                                     </div>

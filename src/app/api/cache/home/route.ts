@@ -12,7 +12,7 @@ async function loadHomeData() {
         { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
-    const [sectionsResponse, registrationsResponse, advisorsResponse] = await Promise.all([
+    const [sectionsResponse, registrationsResponse, advisorsResponse, settingsResponse] = await Promise.all([
         supabase
             .from('sections')
             .select('id, name, capacity, semester_id, semesters!inner(name, is_active)')
@@ -23,6 +23,11 @@ async function loadHomeData() {
             .from('advisors')
             .select('id, name, email, phone, designation, student_advisor_ranges(start_id, end_id)')
             .order('name'),
+        supabase
+            .from('system_settings')
+            .select('timer_enabled, registration_start_at, registration_end_at, timezone')
+            .eq('id', 1)
+            .maybeSingle(),
     ])
 
     const sections = (sectionsResponse.data || []).map((section: any) => ({
@@ -33,6 +38,12 @@ async function loadHomeData() {
     return {
         sections,
         advisors: advisorsResponse.data || [],
+        registrationTimer: {
+            enabled: Boolean(settingsResponse.data?.timer_enabled),
+            startAt: settingsResponse.data?.registration_start_at || null,
+            endAt: settingsResponse.data?.registration_end_at || null,
+            timezone: settingsResponse.data?.timezone || 'Asia/Dhaka',
+        },
     }
 }
 

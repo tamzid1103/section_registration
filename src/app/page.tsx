@@ -16,11 +16,18 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog";
-import { Search, Loader2, BookOpen, GraduationCap, Users, CheckCircle2, LogIn, LayoutDashboard, ArrowUp, InfoIcon, KeyRound, User, Shield } from "lucide-react";
+import { Search, Loader2, BookOpen, GraduationCap, Users, CheckCircle2, LogIn, LayoutDashboard, ArrowUp, InfoIcon, KeyRound, User, Shield, Clock3, Timer } from "lucide-react";
 import Link from "next/link";
 
 type Mode = "login" | "register";
 type RegisterRole = "cr" | "advisor";
+
+type RegistrationTimerState = {
+    enabled: boolean;
+    startAt: string | null;
+    endAt: string | null;
+    timezone: string;
+};
 
 export default function StudentHub() {
     const router = useRouter();
@@ -32,6 +39,13 @@ export default function StudentHub() {
     const [userRole, setUserRole] = useState<string | null>(null);
     const [dashboardUrl, setDashboardUrl] = useState("/auth/login");
     const [showScrollTop, setShowScrollTop] = useState(false);
+    const [currentTime, setCurrentTime] = useState(() => new Date());
+    const [registrationTimer, setRegistrationTimer] = useState<RegistrationTimerState>({
+        enabled: false,
+        startAt: null,
+        endAt: null,
+        timezone: "Asia/Dhaka",
+    });
 
     const [authOpen, setAuthOpen] = useState(false);
     const [authMode, setAuthMode] = useState<Mode>("login");
@@ -43,6 +57,7 @@ export default function StudentHub() {
     const [authFullName, setAuthFullName] = useState("");
     const [authStudentId, setAuthStudentId] = useState("");
     const [authSectionInterested, setAuthSectionInterested] = useState("");
+    const [mounted, setMounted] = useState(false);
 
     async function fetchData() {
         const response = await fetch('/api/cache/home', { cache: 'no-store' })
@@ -52,6 +67,12 @@ export default function StudentHub() {
         const homeData = payload.data || {}
         setSections(homeData.sections || [])
         setAdvisors(homeData.advisors || [])
+        setRegistrationTimer({
+            enabled: Boolean(homeData.registrationTimer?.enabled),
+            startAt: homeData.registrationTimer?.startAt || null,
+            endAt: homeData.registrationTimer?.endAt || null,
+            timezone: homeData.registrationTimer?.timezone || "Asia/Dhaka",
+        })
     }
 
     useEffect(() => {
@@ -272,6 +293,18 @@ export default function StudentHub() {
         return () => window.removeEventListener("scroll", handleScroll);
     }, []);
 
+    useEffect(() => {
+        const intervalId = window.setInterval(() => {
+            setCurrentTime(new Date());
+        }, 1000);
+
+        return () => window.clearInterval(intervalId);
+    }, []);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
     const parseStudentIdToNumber = (value: string) => {
         const parts = (value || "").split("-");
         if (parts.length !== 3) return Number.POSITIVE_INFINITY;
@@ -293,6 +326,73 @@ export default function StudentHub() {
         if (diff !== 0) return diff;
         return (a?.name ?? "").localeCompare(b?.name ?? "");
     });
+
+    const formatDhakaClock = (date: Date) => new Intl.DateTimeFormat("en-GB", {
+        timeZone: registrationTimer.timezone || "Asia/Dhaka",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+    }).format(date);
+
+    const formatDhakaDate = (date: Date) => new Intl.DateTimeFormat("en-GB", {
+        timeZone: registrationTimer.timezone || "Asia/Dhaka",
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+    }).format(date);
+
+    const formatCountdown = (targetMs: number) => {
+        const remaining = Math.max(0, targetMs - currentTime.getTime());
+        const totalSeconds = Math.floor(remaining / 1000);
+        const days = Math.floor(totalSeconds / 86400);
+        const hours = Math.floor((totalSeconds % 86400) / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+        return `${days}d : ${String(hours).padStart(2, "0")}h : ${String(minutes).padStart(2, "0")}m : ${String(seconds).padStart(2, "0")}s`;
+    };
+
+    const getTimerDisplayState = () => {
+        const startMs = registrationTimer.startAt ? new Date(registrationTimer.startAt).getTime() : null;
+        const endMs = registrationTimer.endAt ? new Date(registrationTimer.endAt).getTime() : null;
+        const nowMs = currentTime.getTime();
+
+        if (!registrationTimer.enabled || !startMs || !endMs) {
+            return {
+                title: "Current Time",
+                value: formatDhakaClock(currentTime),
+                subtitle: formatDhakaDate(currentTime),
+                chip: "Idle",
+            };
+        }
+
+        if (nowMs < startMs) {
+            return {
+                title: "Registration Starts In",
+                value: formatCountdown(startMs),
+                subtitle: `Starts ${new Date(startMs).toLocaleString()}`,
+                chip: "Before Start",
+            };
+        }
+
+        if (nowMs < endMs) {
+            return {
+                title: "Registration Ends In",
+                value: formatCountdown(endMs),
+                subtitle: `Ends ${new Date(endMs).toLocaleString()}`,
+                chip: "Active",
+            };
+        }
+
+        return {
+            title: "Registration Window Ended",
+            value: formatDhakaClock(currentTime),
+            subtitle: formatDhakaDate(currentTime),
+            chip: "Ended",
+        };
+    };
+
+    const timerDisplay = getTimerDisplayState();
 
     const hasQuery = query.length >= 2;
 
@@ -371,6 +471,36 @@ export default function StudentHub() {
         <div className="min-h-screen bg-[#F8FAFC]">
             {/* Header */}
             <div className="bg-[#2563EB] text-white pt-16 pb-24 px-6 text-center relative">
+                {/* Small screens: stacked clock above title */}
+                <div className="sm:hidden mb-4">
+                    <div className="mx-auto inline-block rounded-xl border border-white/25 bg-white/10 px-4 py-2 text-left shadow-md backdrop-blur-sm">
+                        <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-blue-100">
+                            <Timer className="h-3.5 w-3.5" />
+                            {timerDisplay.title}
+                        </div>
+                        <p className="mt-1 font-mono text-sm font-bold text-white">{mounted ? timerDisplay.value : '—:—:—'}</p>
+                        <div className="mt-1 flex items-center gap-2 text-[11px] text-blue-100">
+                            <Clock3 className="h-3.5 w-3.5" />
+                            <span>{mounted ? timerDisplay.subtitle : ''}</span>
+                            <span className="rounded border border-white/30 px-1.5 py-0.5 text-[10px]">{timerDisplay.chip}</span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Larger screens: floating clock to the left */}
+                <div className="hidden sm:block absolute top-4 left-6 rounded-xl border border-white/25 bg-white/15 px-4 py-2 text-left shadow-md backdrop-blur-sm">
+                    <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-blue-100">
+                        <Timer className="h-3.5 w-3.5" />
+                        {timerDisplay.title}
+                    </div>
+                    <p className="mt-1 font-mono text-sm font-bold text-white sm:text-base">{mounted ? timerDisplay.value : '—:—:—'}</p>
+                    <div className="mt-1 flex items-center gap-2 text-[11px] text-blue-100">
+                        <Clock3 className="h-3.5 w-3.5" />
+                        <span>{mounted ? timerDisplay.subtitle : ''}</span>
+                        <span className="rounded border border-white/30 px-1.5 py-0.5 text-[10px]">{timerDisplay.chip}</span>
+                    </div>
+                </div>
+
                 <h1 className="text-4xl font-extrabold tracking-tight mb-3">DIU Section Pre-Registration</h1>
                 <p className="max-w-xl mx-auto text-blue-100 opacity-90">Check real-time section availability and your registration status.</p>
 
