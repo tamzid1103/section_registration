@@ -59,3 +59,5 @@ Notes:
 - Redis is used only for cache data, not for authentication or authorization.
 - If Redis is unavailable, the app still compiles and the cache routes fall back to direct Supabase reads.
 - Mutation pages clear the cache after section, semester, registration, and CR approval changes so the UI stays fresh.
+
+Deployment note: Vercel is connected to GitHub `main` and should auto-deploy future pushes.
