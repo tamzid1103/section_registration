@@ -8,7 +8,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { Switch } from '@/components/ui/switch'
-import { Plus, Lock, Unlock, Clock3 } from 'lucide-react'
+import { Plus, Lock, Unlock } from 'lucide-react'
 import { invalidateCacheScopes } from '@/lib/cache/client'
 
 type SemesterRow = {
@@ -16,7 +16,6 @@ type SemesterRow = {
     name: string
     is_active: boolean
     is_locked: boolean
-    auto_lock_at: string | null
     locked_at: string | null
     created_at: string
 }
@@ -44,9 +43,9 @@ function fromDhakaInputValue(inputValue: string) {
     return new Date(`${inputValue}:00${DHAKA_OFFSET}`).toISOString()
 }
 
+
 export default function AdminSemesters() {
     const [semesters, setSemesters] = useState<SemesterRow[]>([])
-    const [autoLockDrafts, setAutoLockDrafts] = useState<Record<string, string>>({})
     const [newName, setNewName] = useState('')
     const [timerEnabled, setTimerEnabled] = useState(false)
     const [timerStart, setTimerStart] = useState('')
@@ -54,7 +53,7 @@ export default function AdminSemesters() {
     const supabase = createClient()
     const [actionStatuses, setActionStatuses] = useState<Record<string, { message: string; type: 'success' | 'error' | 'info' }>>({})
     const [actionBusy, setActionBusy] = useState<Record<string, boolean>>({})
-    const [timerSaveStatus, setTimerSaveStatus] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+    const [timerSaveStatus, setTimerSaveStatus] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null)
     const [globalBusy, setGlobalBusy] = useState(false)
 
     useEffect(() => {
@@ -65,13 +64,7 @@ export default function AdminSemesters() {
     async function fetchSemesters() {
         const { data } = await supabase.from('semesters').select('*').order('created_at', { ascending: false })
         if (data) {
-            const rows = (data || []) as SemesterRow[]
-            setSemesters(rows)
-            const nextDrafts: Record<string, string> = {}
-            rows.forEach((row) => {
-                nextDrafts[row.id] = toDhakaInputValue(row.auto_lock_at)
-            })
-            setAutoLockDrafts(nextDrafts)
+            setSemesters((data || []) as SemesterRow[])
         }
     }
 
@@ -127,7 +120,7 @@ export default function AdminSemesters() {
             setActionStatuses((s) => ({ ...s, [id]: { message: err?.message || 'Failed to update', type: 'error' } }))
         } finally {
             setActionBusy((s) => ({ ...s, [id]: false }))
-            setTimeout(() => setActionStatuses((s) => ({ ...s, [id]: undefined })), 3500)
+            setTimeout(() => setActionStatuses((s) => { const n = { ...s }; delete n[id]; return n }), 3500)
         }
     }
 
@@ -151,49 +144,10 @@ export default function AdminSemesters() {
             setActionStatuses((s) => ({ ...s, [id]: { message: err?.message || 'Failed to update lock', type: 'error' } }))
         } finally {
             setActionBusy((s) => ({ ...s, [id]: false }))
-            setTimeout(() => setActionStatuses((s) => ({ ...s, [id]: undefined })), 3500)
+            setTimeout(() => setActionStatuses((s) => { const n = { ...s }; delete n[id]; return n }), 3500)
         }
     }
 
-    async function saveAutoLockAt(semesterId: string) {
-        const draft = autoLockDrafts[semesterId] || ''
-        if (!draft) return
-        setActionBusy((s) => ({ ...s, [semesterId]: true }))
-        setActionStatuses((s) => ({ ...s, [semesterId]: { message: 'Saving auto-lock...', type: 'info' } }))
-        try {
-            const autoLockIso = fromDhakaInputValue(draft)
-            const { error } = await supabase
-                .from('semesters')
-                .update({ auto_lock_at: autoLockIso })
-                .eq('id', semesterId)
-            if (error) throw error
-            await invalidateCacheScopes(['home', 'admin'])
-            fetchSemesters()
-            setActionStatuses((s) => ({ ...s, [semesterId]: { message: 'Auto-lock saved', type: 'success' } }))
-        } catch (err: any) {
-            setActionStatuses((s) => ({ ...s, [semesterId]: { message: err?.message || 'Failed to save auto-lock', type: 'error' } }))
-        } finally {
-            setActionBusy((s) => ({ ...s, [semesterId]: false }))
-            setTimeout(() => setActionStatuses((s) => ({ ...s, [semesterId]: undefined })), 3500)
-        }
-    }
-
-    async function clearAutoLockAt(semesterId: string) {
-        setActionBusy((s) => ({ ...s, [semesterId]: true }))
-        setActionStatuses((s) => ({ ...s, [semesterId]: { message: 'Clearing auto-lock...', type: 'info' } }))
-        try {
-            const { error } = await supabase
-            if (error) throw error
-            await invalidateCacheScopes(['home', 'admin'])
-            fetchSemesters()
-            setActionStatuses((s) => ({ ...s, [semesterId]: { message: 'Auto-lock cleared', type: 'success' } }))
-        } catch (err: any) {
-            setActionStatuses((s) => ({ ...s, [semesterId]: { message: err?.message || 'Failed to clear auto-lock', type: 'error' } }))
-        } finally {
-            setActionBusy((s) => ({ ...s, [semesterId]: false }))
-            setTimeout(() => setActionStatuses((s) => ({ ...s, [semesterId]: undefined })), 3500)
-        }
-    }
 
     async function saveTimerSettings() {
         const startIso = fromDhakaInputValue(timerStart)
@@ -296,7 +250,6 @@ export default function AdminSemesters() {
                             <TableHead>Name</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead>Lock</TableHead>
-                            <TableHead>Auto Lock</TableHead>
                             <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
@@ -318,28 +271,7 @@ export default function AdminSemesters() {
                                         <Badge variant="secondary" className="px-3 py-1">Unlocked</Badge>
                                     )}
                                 </TableCell>
-                                <TableCell>
-                                    <div className="flex flex-col gap-2">
-                                        <Input
-                                            type="datetime-local"
-                                            value={autoLockDrafts[s.id] || ''}
-                                            onChange={(e) => setAutoLockDrafts((prev) => ({ ...prev, [s.id]: e.target.value }))}
-                                        />
-                                        <div className="flex gap-2">
-                                            <Button size="sm" variant="outline" onClick={() => saveAutoLockAt(s.id)} disabled={!!actionBusy[s.id]}>
-                                                <Clock3 className="mr-1 h-3.5 w-3.5" /> {actionBusy[s.id] ? 'Saving…' : 'Set'}
-                                            </Button>
-                                            <Button size="sm" variant="ghost" onClick={() => clearAutoLockAt(s.id)} disabled={!!actionBusy[s.id]}>
-                                                {actionBusy[s.id] ? 'Clearing…' : 'Clear'}
-                                            </Button>
-                                        </div>
-                                        {actionStatuses[s.id] ? (
-                                            <div className={`mt-2 text-xs ${actionStatuses[s.id].type === 'error' ? 'text-destructive' : actionStatuses[s.id].type === 'success' ? 'text-success' : 'text-muted-foreground'}`}>
-                                                {actionStatuses[s.id].message}
-                                            </div>
-                                        ) : null}
-                                    </div>
-                                </TableCell>
+
                                 <TableCell className="text-right">
                                     <div className="flex items-center justify-end gap-2">
                                         <span className="text-sm text-muted-foreground">

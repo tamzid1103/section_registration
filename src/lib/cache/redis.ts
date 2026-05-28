@@ -33,9 +33,7 @@ async function getRedisClient() {
                     // short connect timeout to fail fast in case of network issues
                     connectTimeout: 2000,
                     // When using TLS, provide SNI servername and allow toggling cert validation
-                    tls: useTls
-                        ? { servername: host, rejectUnauthorized: process.env.NODE_ENV === 'production' }
-                        : undefined,
+                    tls: useTls ? true : undefined,
                 },
                 username,
                 password,
