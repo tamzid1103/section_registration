@@ -92,7 +92,7 @@ export default function AdminSemesters() {
     async function addSemester() {
         if (!newName) return
         setGlobalBusy(true)
-        setTimerSaveStatus({ message: 'Creating semester...', type: 'info' })
+        setTimerSaveStatus({ message: 'Creating semester...', type: 'success' })
         try {
             const { error } = await supabase.from('semesters').insert({ name: newName })
             if (error) throw error
