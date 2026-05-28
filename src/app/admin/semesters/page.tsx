@@ -52,7 +52,7 @@ export default function AdminSemesters() {
     const [timerStart, setTimerStart] = useState('')
     const [timerEnd, setTimerEnd] = useState('')
     const supabase = createClient()
-    const [actionStatuses, setActionStatuses] = useState<Record<string, { message: string; type: 'ssccess' | 'error' | 'info' } | undefined>>({})
+    const [actionStatuses, setActionStatuses] = useState<Record<string, { message: string; type: 'success' | 'error' | 'info' } | undefined>>({})
     const [actionBusy, setActionBusy] = useState<Record<string, boolean>>({})
     const [timerSaveStatus, setTimerSaveStatus] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
     const [globalBusy, setGlobalBusy] = useState(false)
