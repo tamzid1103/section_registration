@@ -34,6 +34,12 @@ async function getRedisClient() {
                     connectTimeout: 2000,
                     // When using TLS, provide SNI servername and allow toggling cert validation
                     tls: useTls ? true : undefined,
+                    reconnectStrategy: (retries) => {
+                        if (retries > 2) {
+                            return false; // Stop retrying after 3 attempts
+                        }
+                        return 500; // Wait 500ms before retrying
+                    },
                 },
                 username,
                 password,
