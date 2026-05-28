@@ -51,7 +51,7 @@ export default function AdminSemesters() {
     const [timerStart, setTimerStart] = useState('')
     const [timerEnd, setTimerEnd] = useState('')
     const supabase = createClient()
-    const [actionStatuses, setActionStatuses] = useState<Record<string, { message: string; type: 'success' | 'error' | 'info' }>>({})
+    const [actionStatuses, setActionStatuses] = useState<Record<string, { message: string; type: 'success' | 'error' | 'info' } | undefined>>({})
     const [actionBusy, setActionBusy] = useState<Record<string, boolean>>({})
     const [timerSaveStatus, setTimerSaveStatus] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null)
     const [globalBusy, setGlobalBusy] = useState(false)
@@ -85,7 +85,7 @@ export default function AdminSemesters() {
     async function addSemester() {
         if (!newName) return
         setGlobalBusy(true)
-        setTimerSaveStatus({ message: 'Creating semester...', type: 'info' })
+        setTimerSaveStatus({ message: 'Creating semester...', type: 'success' })
         try {
             const { error } = await supabase.from('semesters').insert({ name: newName })
             if (error) throw error
@@ -147,6 +147,7 @@ export default function AdminSemesters() {
             setTimeout(() => setActionStatuses((s) => { const n = { ...s }; delete n[id]; return n }), 3500)
         }
     }
+
 
 
     async function saveTimerSettings() {
@@ -291,11 +292,11 @@ export default function AdminSemesters() {
                                             {actionBusy[s.id] ? (s.is_locked ? 'Unlocking…' : 'Locking…') : (s.is_locked ? <><Unlock className="mr-1 h-3.5 w-3.5" /> Unlock</> : <><Lock className="mr-1 h-3.5 w-3.5" /> Lock</>)}
                                         </Button>
                                     </div>
-                                    {actionStatuses[s.id] ? (
-                                        <div className={`mt-2 text-xs ${actionStatuses[s.id].type === 'error' ? 'text-destructive' : actionStatuses[s.id].type === 'success' ? 'text-success' : 'text-muted-foreground'}`}>
-                                            {actionStatuses[s.id].message}
+                                    {(() => { const st = actionStatuses[s.id]; return st ? (
+                                        <div className={`mt-2 text-xs ${st.type === 'error' ? 'text-destructive' : st.type === 'success' ? 'text-success' : 'text-muted-foreground'}`}>
+                                            {st.message}
                                         </div>
-                                    ) : null}
+                                    ) : null })()} 
                                 </TableCell>
                             </TableRow>
                         ))}
