@@ -1,8 +1,1 @@
-{
-  "crons": [
-    {
-      "path": "/api/admin/semesters/auto-lock/run",
-      "schedule": "* * * * *"
-    }
-  ]
-}
+{"crons":[{"path":"/api/admin/semesters/auto-lock/run","schedule":"0 0 * * *"}]}
