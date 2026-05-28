@@ -61,3 +61,4 @@ Notes:
 - Mutation pages clear the cache after section, semester, registration, and CR approval changes so the UI stays fresh.
 
 Deployment note: Vercel is connected to GitHub `main` and should auto-deploy future pushes.
+If a new push does not show up in production, recheck the Vercel Git settings and trigger a redeploy from the latest `main` commit.
