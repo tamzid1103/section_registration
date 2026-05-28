@@ -11,6 +11,12 @@ async function loadHomeData() {
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
         { auth: { autoRefreshToken: false, persistSession: false } }
     )
+    // system_settings may have restrictive RLS — use service role key to guarantee read
+    const adminSupabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        { auth: { autoRefreshToken: false, persistSession: false } }
+    )
 
     const [sectionsResponse, registrationsResponse, advisorsResponse, settingsResponse] = await Promise.all([
         supabase
@@ -23,7 +29,7 @@ async function loadHomeData() {
             .from('advisors')
             .select('id, name, email, phone, designation, student_advisor_ranges(start_id, end_id)')
             .order('name'),
-        supabase
+        adminSupabase
             .from('system_settings')
             .select('timer_enabled, registration_start_at, registration_end_at, timezone')
             .eq('id', 1)

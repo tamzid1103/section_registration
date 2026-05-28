@@ -69,14 +69,10 @@ export default function AdminSemesters() {
     }
 
     async function fetchTimerSettings() {
-        const { data } = await supabase
-            .from('system_settings')
-            .select('timer_enabled, registration_start_at, registration_end_at')
-            .eq('id', 1)
-            .maybeSingle()
-
+        const res = await fetch('/api/admin/timer-settings', { cache: 'no-store' })
+        if (!res.ok) return
+        const { data } = await res.json()
         if (!data) return
-
         setTimerEnabled(Boolean(data.timer_enabled))
         setTimerStart(toDhakaInputValue(data.registration_start_at))
         setTimerEnd(toDhakaInputValue(data.registration_end_at))
@@ -169,19 +165,19 @@ export default function AdminSemesters() {
         setGlobalBusy(true)
         setTimerSaveStatus({ message: 'Saving...', type: 'info' })
         try {
-            const { error } = await supabase
-                .from('system_settings')
-                .upsert({
-                    id: 1,
+            const res = await fetch('/api/admin/timer-settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
                     timer_enabled: timerEnabled,
                     registration_start_at: startIso,
                     registration_end_at: endIso,
-                    timezone: 'Asia/Dhaka',
-                    updated_at: new Date().toISOString(),
-                })
-            if (error) throw error
+                }),
+            })
+            const json = await res.json()
+            if (!res.ok) throw new Error(json.error || 'Failed to save')
             await invalidateCacheScopes(['home', 'admin'])
-            fetchTimerSettings()
+            await fetchTimerSettings()
             setTimerSaveStatus({ message: 'Saved', type: 'success' })
         } catch (err: any) {
             setTimerSaveStatus({ message: err?.message || 'Failed to save', type: 'error' })
