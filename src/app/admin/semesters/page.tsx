@@ -182,7 +182,7 @@ export default function AdminSemesters() {
         setActionBusy((s) => ({ ...s, [semesterId]: true }))
         setActionStatuses((s) => ({ ...s, [semesterId]: { message: 'Clearing auto-lock...', type: 'info' } }))
         try {
-            const { error } = await supabase
+            const { error } = await supabase.from('semesters').update({ auto_lock_at: null }).eq('id', semesterId)
             if (error) throw error
             await invalidateCacheScopes(['home', 'admin'])
             fetchSemesters()
