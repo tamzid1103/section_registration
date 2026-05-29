@@ -295,16 +295,165 @@ export default function CRManagePage() {
         a.download = `registrations_${semester?.name || 'export'}.csv`; a.click()
     }
 
+    // ── PDF Export / Preview ────────────────────────────────────────────────
+    function exportPDF() {
+        if (!registrations || registrations.length === 0) {
+            toast.error('No registrations to preview.')
+            return
+        }
+
+        const previewWindow = window.open('', '_blank')
+
+        if (!previewWindow) {
+            toast.error('Popup blocked. Please allow popups to open the print preview.')
+            return
+        }
+
+        const rowsHtml = registrations.map(r => `
+            <tr>
+                <td>${r.student_id || ''}</td>
+                <td>${r.student_name || ''}</td>
+                <td>${r.sections?.name || ''}</td>
+                <td>${r.lab_groups?.name || '—'}</td>
+                <td>${r.advisors?.name || '—'}</td>
+                <td>${r.advisor_completed ? 'Yes' : 'No'}</td>
+                <td>${r.timestamp ? new Date(r.timestamp).toLocaleString() : ''}</td>
+            </tr>
+        `).join('')
+
+        const html = `<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Registrations - ${semester?.name || 'Export'}</title>
+    <style>
+        @page { size: auto; margin: 12mm; }
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            color: #111;
+            margin: 0;
+            padding: 24px;
+        }
+        h1 {
+            font-size: 20px;
+            margin: 0 0 6px;
+        }
+        .meta {
+            font-size: 12px;
+            color: #555;
+            margin-bottom: 18px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+            font-size: 11px;
+        }
+        th, td {
+            border: 1px solid #cfcfcf;
+            padding: 6px 8px;
+            vertical-align: top;
+            word-wrap: break-word;
+            overflow-wrap: anywhere;
+        }
+        th {
+            background: #f3f4f6;
+            font-weight: 700;
+            text-align: left;
+        }
+        tr { break-inside: avoid; page-break-inside: avoid; }
+        .col-id { width: 12%; }
+        .col-name { width: 18%; }
+        .col-section { width: 12%; }
+        .col-lab { width: 12%; }
+        .col-advisor { width: 18%; }
+        .col-done { width: 8%; text-align: center; }
+        .col-time { width: 20%; }
+        @media print {
+            body { padding: 0; }
+        }
+    </style>
+</head>
+<body>
+    <h1>Registrations - ${semester?.name || 'Export'}</h1>
+    <div class="meta">Total students: ${registrations.length}. Use the browser print dialog to choose orientation, paper size, and destination.</div>
+    <table>
+        <thead>
+            <tr>
+                <th class="col-id">Student ID</th>
+                <th class="col-name">Student Name</th>
+                <th class="col-section">Section</th>
+                <th class="col-lab">Lab Group</th>
+                <th class="col-advisor">Advisor</th>
+                <th class="col-done">Done</th>
+                <th class="col-time">Registered At</th>
+            </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+    </table>
+</body>
+</html>`
+
+        previewWindow.document.open()
+        previewWindow.document.write(html)
+        previewWindow.document.close()
+
+        const triggerPrint = () => {
+            previewWindow.focus()
+            previewWindow.print()
+        }
+
+        previewWindow.onload = triggerPrint
+        setTimeout(triggerPrint, 500)
+    }
+
     // ── Print PDF ─────────────────────────────────────────────────────────────
     function printPDF() {
-        const printContent = document.getElementById('print-area')?.innerHTML
+        const printArea = document.getElementById('print-area')
+        const printContent = printArea?.innerHTML
+
+        if (!printContent) {
+            toast.error('Nothing to print.')
+            return
+        }
+
         const win = window.open('', '_blank')
-        if (!win || !printContent) return
-        win.document.write(`<html><head><title>Registrations - ${semester?.name}</title>
-        <style>body{font-family:Arial;padding:20px}table{border-collapse:collapse;width:100%}
-        th,td{border:1px solid #ccc;padding:6px 10px;font-size:12px}th{background:#f0f0f0}
-        </style></head><body>${printContent}</body></html>`)
-        win.document.close(); win.print()
+
+        // If popup is blocked, fallback to in-page print
+        if (!win) {
+            toast('Popup blocked — opening print dialog in current tab.')
+            // Add a temporary class for print styling if needed
+            document.documentElement.classList.add('cr-print-mode')
+            setTimeout(() => {
+                window.print()
+                document.documentElement.classList.remove('cr-print-mode')
+            }, 200)
+            return
+        }
+
+        const html = `<!doctype html><html><head><meta charset="utf-8"><title>Registrations - ${semester?.name || ''}</title>` +
+            `<meta name="viewport" content="width=device-width,initial-scale=1"/>` +
+            `<style>body{font-family:Arial,Helvetica,sans-serif;padding:20px;color:#111}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:6px 10px;font-size:12px}th{background:#f0f0f0}</style>` +
+            `</head><body>${printContent}</body></html>`
+
+        try {
+            win.document.open()
+            win.document.write(html)
+            win.document.close()
+            // Ensure printing happens after content has loaded
+            win.focus()
+            win.onload = () => {
+                try { win.print() } catch (e) { console.error('Print failed:', e) }
+            }
+            // Fallback print after short delay if onload doesn't fire
+            setTimeout(() => {
+                try { win.print() } catch (e) { /* ignore */ }
+            }, 600)
+        } catch (e) {
+            console.error('Failed to open print window:', e)
+            toast.error('Unable to open print preview.')
+        }
     }
 
     const filtered = registrations.filter(r =>
@@ -419,7 +568,7 @@ export default function CRManagePage() {
                                     <Button variant="outline" className="flex-1 gap-2" onClick={exportCSV}>
                                         <Download className="w-4 h-4" /> Export CSV
                                     </Button>
-                                    <Button variant="outline" className="flex-1 gap-2" onClick={printPDF}>
+                                    <Button variant="outline" className="flex-1 gap-2" onClick={exportPDF}>
                                         <Download className="w-4 h-4" /> Print / PDF
                                     </Button>
                                 </div>
