@@ -1,13 +1,14 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
-import { UserPlus, Trash2, ChevronLeft, Plus } from 'lucide-react'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { UserPlus, Trash2, ChevronLeft, Plus, Upload, Download, FileText } from 'lucide-react'
 import { toast } from 'sonner'
 import Link from 'next/link'
 
@@ -16,6 +17,13 @@ export default function AdminAdvisorsPage() {
     const [semesters, setSemesters] = useState<any[]>([])
     const [ranges, setRanges] = useState<any[]>([])
     const [loading, setLoading] = useState(false)
+
+    // Upload progress states
+    const [uploading, setUploading] = useState(false)
+    const [uploadProgress, setUploadProgress] = useState(0)
+    const [uploadTotal, setUploadTotal] = useState(0)
+    const [uploadCurrent, setUploadCurrent] = useState(0)
+    const csvRef = useRef<HTMLInputElement>(null)
 
     // New advisor form
     const [newName, setNewName] = useState('')
@@ -79,6 +87,249 @@ export default function AdminAdvisorsPage() {
         }
     }
 
+    function parseCSVRow(row: string) {
+        const result = []
+        let current = ''
+        let inQuotes = false
+        for (let i = 0; i < row.length; i++) {
+            const char = row[i]
+            if (char === '"') {
+                inQuotes = !inQuotes
+            } else if (char === ',' && !inQuotes) {
+                result.push(current.trim())
+                current = ''
+            } else {
+                current += char
+            }
+        }
+        result.push(current.trim())
+        return result.map(val => val.replace(/^"|"$/g, ''))
+    }
+
+    function exportCSV() {
+        if (advisors.length === 0) {
+            toast.error('No advisor data available to export.')
+            return
+        }
+        const headers = ['Name', 'Email', 'Phone', 'Designation']
+        const rows = advisors.map(a => [
+            a.name || '',
+            a.email || '',
+            a.phone || '',
+            a.designation || ''
+        ])
+        const csv = [headers, ...rows].map(r => r.map(val => `"${val.replace(/"/g, '""')}"`).join(',')).join('\n')
+        const blob = new Blob([csv], { type: 'text/csv' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = 'advisors.csv'
+        a.click()
+        toast.success('Advisors list exported to CSV.')
+    }
+
+    async function exportPDF() {
+        if (advisors.length === 0) {
+            toast.error('No advisor data available to export.')
+            return
+        }
+        try {
+            const { jsPDF } = await import('jspdf')
+            const doc = new jsPDF()
+
+            // Header banner
+            doc.setFillColor(30, 41, 59) // slate-800
+            doc.rect(0, 0, 210, 40, 'F')
+
+            doc.setFont('helvetica', 'bold')
+            doc.setFontSize(22)
+            doc.setTextColor(255, 255, 255)
+            doc.text('DIU Section Pre-Registration', 14, 20)
+
+            doc.setFont('helvetica', 'normal')
+            doc.setFontSize(12)
+            doc.setTextColor(226, 232, 240) // slate-200
+            doc.text('Registered Advisors Directory', 14, 28)
+
+            // Content metadata
+            doc.setFontSize(10)
+            doc.setTextColor(100, 116, 139) // slate-500
+            doc.text(`Total Registered Advisors: ${advisors.length}`, 14, 50)
+            doc.text(`Exported on: ${new Date().toLocaleString()}`, 14, 56)
+
+            doc.setDrawColor(226, 232, 240) // slate-200
+            doc.line(14, 60, 196, 60)
+
+            let y = 70
+
+            // Table Header
+            doc.setFillColor(248, 250, 252) // slate-50
+            doc.rect(14, y - 6, 182, 8, 'F')
+            
+            doc.setFont('helvetica', 'bold')
+            doc.setFontSize(10)
+            doc.setTextColor(30, 41, 59) // slate-800
+            doc.text('Name', 16, y - 1)
+            doc.text('Email', 65, y - 1)
+            doc.text('Phone', 125, y - 1)
+            doc.text('Designation', 155, y - 1)
+
+            doc.line(14, y + 2, 196, y + 2)
+            y += 8
+
+            doc.setFont('helvetica', 'normal')
+            doc.setTextColor(71, 85, 105) // slate-600
+
+            advisors.forEach((adv, index) => {
+                if (y > 275) {
+                    doc.addPage()
+                    y = 25
+
+                    // Table Header on new page
+                    doc.setFillColor(248, 250, 252) // slate-50
+                    doc.rect(14, y - 6, 182, 8, 'F')
+                    
+                    doc.setFont('helvetica', 'bold')
+                    doc.setFontSize(10)
+                    doc.setTextColor(30, 41, 59) // slate-800
+                    doc.text('Name', 16, y - 1)
+                    doc.text('Email', 65, y - 1)
+                    doc.text('Phone', 125, y - 1)
+                    doc.text('Designation', 155, y - 1)
+                    doc.line(14, y + 2, 196, y + 2)
+                    y += 8
+                    doc.setFont('helvetica', 'normal')
+                    doc.setTextColor(71, 85, 105)
+                }
+
+                // Alternating row colors
+                if (index % 2 === 1) {
+                    doc.setFillColor(250, 250, 250)
+                    doc.rect(14, y - 5, 182, 7, 'F')
+                }
+
+                const name = adv.name || ''
+                const email = adv.email || ''
+                const phone = adv.phone || '—'
+                const designation = adv.designation || '—'
+
+                const truncName = name.length > 25 ? name.substring(0, 22) + '...' : name
+                const truncEmail = email.length > 28 ? email.substring(0, 25) + '...' : email
+                const truncPhone = phone.length > 15 ? phone.substring(0, 12) + '...' : phone
+                const truncDesignation = designation.length > 22 ? designation.substring(0, 19) + '...' : designation
+
+                doc.text(truncName, 16, y)
+                doc.text(truncEmail, 65, y)
+                doc.text(truncPhone, 125, y)
+                doc.text(truncDesignation, 155, y)
+
+                y += 8
+            })
+
+            doc.save('registered_advisors.pdf')
+            toast.success('Advisors list exported to PDF.')
+        } catch (err: any) {
+            console.error('Error generating PDF:', err)
+            toast.error('Could not generate PDF. Please try again.')
+        }
+    }
+
+    function downloadTemplate() {
+        const csvContent = "name,email,phone,designation\nDr. Abc Rahman,advisor@diu.edu.bd,01711111111,Associate Professor\n"
+        const blob = new Blob([csvContent], { type: 'text/csv' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = 'advisors_template.csv'
+        a.click()
+        toast.success('Template CSV downloaded.')
+    }
+
+    async function handleCSVImport(e: React.ChangeEvent<HTMLInputElement>) {
+        const file = e.target.files?.[0]
+        if (!file) return
+        setUploading(true)
+        setUploadProgress(0)
+        setUploadCurrent(0)
+
+        try {
+            const text = await file.text()
+            const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
+            if (lines.length <= 1) {
+                toast.error('The CSV file is empty or has no data rows.')
+                setUploading(false)
+                return
+            }
+
+            const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/^"|"$/g, ''))
+            const nameIdx = headers.indexOf('name')
+            const emailIdx = headers.indexOf('email')
+            const phoneIdx = headers.indexOf('phone')
+            const designationIdx = headers.indexOf('designation')
+
+            if (nameIdx === -1 || emailIdx === -1) {
+                toast.error('CSV header must contain at least "name" and "email" columns.')
+                setUploading(false)
+                return
+            }
+
+            const rows = lines.slice(1)
+            setUploadTotal(rows.length)
+            let success = 0
+            let fail = 0
+
+            for (let i = 0; i < rows.length; i++) {
+                const cols = parseCSVRow(rows[i])
+                const name = cols[nameIdx]
+                const email = cols[emailIdx]
+                const phone = phoneIdx !== -1 ? cols[phoneIdx] : ''
+                const designation = designationIdx !== -1 ? cols[designationIdx] : ''
+
+                if (!name || !email) {
+                    fail++
+                    setUploadCurrent(i + 1)
+                    setUploadProgress(Math.round(((i + 1) / rows.length) * 100))
+                    continue
+                }
+
+                // Check if email domain is valid
+                const domain = email.trim().toLowerCase().split('@')[1] || ''
+                const allowedDomains = ['diu.edu.bd', 'daffodilvarsity.edu.bd']
+                if (!allowedDomains.includes(domain)) {
+                    fail++
+                    setUploadCurrent(i + 1)
+                    setUploadProgress(Math.round(((i + 1) / rows.length) * 100))
+                    continue
+                }
+
+                const { error } = await supabase.from('advisors').insert({
+                    name: name.trim(),
+                    email: email.trim().toLowerCase(),
+                    phone: phone.trim() || null,
+                    designation: designation.trim() || null
+                })
+
+                if (error) {
+                    console.error('Failed to import advisor row:', error.message)
+                    fail++
+                } else {
+                    success++
+                }
+
+                setUploadCurrent(i + 1)
+                setUploadProgress(Math.round(((i + 1) / rows.length) * 100))
+            }
+
+            toast.success(`Import complete: ${success} advisors added, ${fail} failed.`)
+            fetchAll()
+        } catch (err: any) {
+            toast.error(`Error importing CSV: ${err.message}`)
+        } finally {
+            setUploading(false)
+            if (csvRef.current) csvRef.current.value = ''
+        }
+    }
+
     async function handleAddRange(e: React.FormEvent) {
         e.preventDefault()
         setLoading(true)
@@ -121,38 +372,96 @@ export default function AdminAdvisorsPage() {
             </div>
 
             <div className="grid md:grid-cols-2 gap-8">
-                {/* Add New Advisor */}
+                {/* Advisor Administration */}
                 <Card>
                     <CardHeader>
                         <CardTitle className="flex gap-2 items-center">
-                            <UserPlus className="h-5 w-5" /> Add Advisor to System
+                            <UserPlus className="h-5 w-5" /> Advisor Administration
                         </CardTitle>
                         <CardDescription>
-                            Once an advisor&apos;s email is added here, they can register and get auto-approved.
+                            Add a single advisor or perform bulk operations using CSV.
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <form onSubmit={handleAddAdvisor} className="space-y-3">
-                            <div className="space-y-1">
-                                <label className="text-sm font-medium">Full Name *</label>
-                                <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Dr. Abc Rahman" required />
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-sm font-medium">DIU Email *</label>
-                                <Input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="advisor@diu.edu.bd" required />
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-sm font-medium">Phone Number</label>
-                                <Input value={newPhone} onChange={e => setNewPhone(e.target.value)} placeholder="01XXXXXXXXX" />
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-sm font-medium">Designation</label>
-                                <Input value={newDesignation} onChange={e => setNewDesignation(e.target.value)} placeholder="Associate Professor" />
-                            </div>
-                            <Button type="submit" className="w-full gap-2" disabled={loading}>
-                                <Plus className="h-4 w-4" /> Add Advisor
-                            </Button>
-                        </form>
+                        <Tabs defaultValue="single" className="w-full">
+                            <TabsList className="grid w-full grid-cols-2 mb-4">
+                                <TabsTrigger value="single" disabled={uploading}>Single Advisor</TabsTrigger>
+                                <TabsTrigger value="bulk" disabled={uploading}>Bulk Operations</TabsTrigger>
+                            </TabsList>
+                            
+                            <TabsContent value="single">
+                                <form onSubmit={handleAddAdvisor} className="space-y-3">
+                                    <div className="space-y-1">
+                                        <label className="text-sm font-medium">Full Name *</label>
+                                        <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Dr. Abc Rahman" required />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-sm font-medium">DIU Email *</label>
+                                        <Input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="advisor@diu.edu.bd" required />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-sm font-medium">Phone Number</label>
+                                        <Input value={newPhone} onChange={e => setNewPhone(e.target.value)} placeholder="01XXXXXXXXX" />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-sm font-medium">Designation</label>
+                                        <Input value={newDesignation} onChange={e => setNewDesignation(e.target.value)} placeholder="Associate Professor" />
+                                    </div>
+                                    <Button type="submit" className="w-full gap-2" disabled={loading}>
+                                        <Plus className="h-4 w-4" /> Add Advisor
+                                    </Button>
+                                </form>
+                            </TabsContent>
+                            
+                            <TabsContent value="bulk" className="space-y-4">
+                                {!uploading ? (
+                                    <div className="border-2 border-dashed rounded-lg p-6 text-center space-y-3">
+                                        <Upload className="w-8 h-8 mx-auto text-slate-400" />
+                                        <div>
+                                            <p className="text-sm font-medium">Upload Advisor CSV</p>
+                                            <p className="text-xs text-muted-foreground mt-1">Columns: name, email, phone (optional), designation (optional)</p>
+                                        </div>
+                                        <input type="file" accept=".csv" ref={csvRef} onChange={handleCSVImport} className="hidden" />
+                                        <div className="flex gap-2 justify-center">
+                                            <Button variant="outline" size="sm" onClick={() => csvRef.current?.click()}>
+                                                Choose File
+                                            </Button>
+                                            <Button variant="ghost" size="sm" onClick={downloadTemplate}>
+                                                Download Template
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="border-2 border-dashed rounded-lg p-6 space-y-4">
+                                        <div className="flex justify-between text-sm font-medium">
+                                            <span className="text-primary flex items-center gap-2">
+                                                <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+                                                Uploading Advisors...
+                                            </span>
+                                            <span className="text-muted-foreground">{uploadCurrent} / {uploadTotal} ({uploadProgress}%)</span>
+                                        </div>
+                                        <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-3">
+                                            <div 
+                                                className="bg-primary h-3 rounded-full transition-all duration-300 shadow-sm" 
+                                                style={{ width: `${uploadProgress}%` }}
+                                            />
+                                        </div>
+                                        <p className="text-xs text-muted-foreground text-center animate-pulse">
+                                            Processing advisor row {uploadCurrent} of {uploadTotal}...
+                                        </p>
+                                    </div>
+                                )}
+
+                                <div className="flex gap-2">
+                                    <Button variant="outline" className="flex-1 gap-2" onClick={exportCSV} disabled={uploading}>
+                                        <Download className="w-4 h-4" /> Export CSV
+                                    </Button>
+                                    <Button variant="outline" className="flex-1 gap-2" onClick={exportPDF} disabled={uploading}>
+                                        <FileText className="w-4 h-4" /> Export PDF
+                                    </Button>
+                                </div>
+                            </TabsContent>
+                        </Tabs>
                     </CardContent>
                 </Card>
 
@@ -224,8 +533,18 @@ export default function AdminAdvisorsPage() {
 
             {/* Advisors List */}
             <Card>
-                <CardHeader>
-                    <CardTitle>Registered Advisors ({advisors.length})</CardTitle>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <div>
+                        <CardTitle>Registered Advisors ({advisors.length})</CardTitle>
+                    </div>
+                    <div className="flex gap-2">
+                        <Button variant="outline" size="sm" className="gap-2" onClick={exportCSV} disabled={uploading}>
+                            <Download className="h-4 w-4" /> Export CSV
+                        </Button>
+                        <Button variant="outline" size="sm" className="gap-2" onClick={exportPDF} disabled={uploading}>
+                            <FileText className="h-4 w-4" /> Export PDF
+                        </Button>
+                    </div>
                 </CardHeader>
                 <CardContent>
                     <Table>

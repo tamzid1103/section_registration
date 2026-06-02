@@ -226,6 +226,30 @@ export default function CRManagePage() {
         fetchRegistrations(); fetchAuditLogs()
     }
 
+    const [uploading, setUploading] = useState(false)
+    const [uploadProgress, setUploadProgress] = useState(0)
+    const [uploadTotal, setUploadTotal] = useState(0)
+    const [uploadCurrent, setUploadCurrent] = useState(0)
+
+    function parseCSVRow(row: string) {
+        const result = []
+        let current = ''
+        let inQuotes = false
+        for (let i = 0; i < row.length; i++) {
+            const char = row[i]
+            if (char === '"') {
+                inQuotes = !inQuotes
+            } else if (char === ',' && !inQuotes) {
+                result.push(current.trim())
+                current = ''
+            } else {
+                current += char
+            }
+        }
+        result.push(current.trim())
+        return result.map(val => val.replace(/^"|"$/g, ''))
+    }
+
     // ── CSV Import ───────────────────────────────────────────────────────────
     async function handleCSVImport(e: React.ChangeEvent<HTMLInputElement>) {
         const file = e.target.files?.[0]
@@ -239,46 +263,74 @@ export default function CRManagePage() {
             return
         }
         const rows = lines.slice(1)
+        if (rows.length === 0) {
+            toast.error('No data found in the CSV file.')
+            return
+        }
+
+        setUploading(true)
+        setUploadProgress(0)
+        setUploadTotal(rows.length)
+        setUploadCurrent(0)
+
         let success = 0, fail = 0
 
         // Get ranges for advisor lookup
         const { data: ranges } = await supabase.from('student_advisor_ranges')
             .select('advisor_id, start_id_numeric, end_id_numeric').eq('semester_id', semester.id)
 
-        for (const row of rows) {
-            const cols = row.split(',').map(c => c.trim().replace(/^"|"$/g, ''))
-            const [studentId, studentName, sectionName, labGroupName, note] = cols
-            if (!studentId || !studentName || !sectionName) { fail++; continue }
-
-            const sec = sections.find(s => s.name.toLowerCase() === sectionName.toLowerCase())
-            if (!sec) { fail++; continue }
-
-            const { data: lgs } = await supabase.from('lab_groups').select('*').eq('section_id', sec.id).order('name')
-            const lg = lgs?.find(l => l.name.toLowerCase() === (labGroupName || '').toLowerCase())
-
-            const numId = parseInt(studentId.replace(/-/g, ''))
-            const match = (ranges || []).find(r => numId >= Number(r.start_id_numeric) && numId <= Number(r.end_id_numeric))
-
-            const { error } = await supabase.from('registrations').insert({
-                student_id: studentId, student_name: studentName,
-                section_id: sec.id, lab_group_id: lg?.id || null,
-                advisor_id: match?.advisor_id || null,
-                entered_by: crInfo.id, note: note || ''
-            })
-            if (error) {
-                const message = error.message || ''
-                if (message.toLowerCase().includes('semester_locked')) {
-                    toast.error('This semester is locked. CSV import is disabled for CR users.')
-                    break
+        try {
+            for (let i = 0; i < rows.length; i++) {
+                const cols = parseCSVRow(rows[i])
+                const [studentId, studentName, sectionName, labGroupName, note] = cols
+                if (!studentId || !studentName || !sectionName) { 
+                    fail++
+                    setUploadCurrent(i + 1)
+                    setUploadProgress(Math.round(((i + 1) / rows.length) * 100))
+                    continue 
                 }
-                fail++
-            } else success++
-        }
 
-        toast.success(`Import done: ${success} added, ${fail} failed.`)
-        await invalidateCacheScopes(['home', 'admin'])
-        if (csvRef.current) csvRef.current.value = ''
-        fetchRegistrations()
+                const sec = sections.find(s => s.name.toLowerCase() === sectionName.toLowerCase())
+                if (!sec) { 
+                    fail++
+                    setUploadCurrent(i + 1)
+                    setUploadProgress(Math.round(((i + 1) / rows.length) * 100))
+                    continue 
+                }
+
+                const { data: lgs } = await supabase.from('lab_groups').select('*').eq('section_id', sec.id).order('name')
+                const lg = lgs?.find(l => l.name.toLowerCase() === (labGroupName || '').toLowerCase())
+
+                const numId = parseInt(studentId.replace(/-/g, ''))
+                const match = (ranges || []).find(r => numId >= Number(r.start_id_numeric) && numId <= Number(r.end_id_numeric))
+
+                const { error } = await supabase.from('registrations').insert({
+                    student_id: studentId, student_name: studentName,
+                    section_id: sec.id, lab_group_id: lg?.id || null,
+                    advisor_id: match?.advisor_id || null,
+                    entered_by: crInfo.id, note: note || ''
+                })
+                if (error) {
+                    const message = error.message || ''
+                    if (message.toLowerCase().includes('semester_locked')) {
+                        toast.error('This semester is locked. CSV import is disabled for CR users.')
+                        break
+                    }
+                    fail++
+                } else success++
+
+                setUploadCurrent(i + 1)
+                setUploadProgress(Math.round(((i + 1) / rows.length) * 100))
+            }
+            toast.success(`Import done: ${success} added, ${fail} failed.`)
+        } catch (err: any) {
+            toast.error(`Error importing CSV: ${err.message}`)
+        } finally {
+            setUploading(false)
+            if (csvRef.current) csvRef.current.value = ''
+            await invalidateCacheScopes(['home', 'admin'])
+            fetchRegistrations()
+        }
     }
 
     // ── CSV Export ───────────────────────────────────────────────────────────
@@ -558,17 +610,38 @@ export default function CRManagePage() {
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4">
-                                <div className="border-2 border-dashed rounded-lg p-6 text-center">
-                                    <Upload className="w-8 h-8 mx-auto text-slate-400 mb-2" />
-                                    <p className="text-sm text-muted-foreground mb-3">Upload a CSV file to bulk-register students</p>
-                                    <input type="file" accept=".csv" ref={csvRef} onChange={handleCSVImport} className="hidden" />
-                                    <Button variant="outline" onClick={() => csvRef.current?.click()} disabled={semester?.is_locked}>Choose CSV File</Button>
-                                </div>
+                                {!uploading ? (
+                                    <div className="border-2 border-dashed rounded-lg p-6 text-center">
+                                        <Upload className="w-8 h-8 mx-auto text-slate-400 mb-2" />
+                                        <p className="text-sm text-muted-foreground mb-3">Upload a CSV file to bulk-register students</p>
+                                        <input type="file" accept=".csv" ref={csvRef} onChange={handleCSVImport} className="hidden" />
+                                        <Button variant="outline" onClick={() => csvRef.current?.click()} disabled={semester?.is_locked}>Choose CSV File</Button>
+                                    </div>
+                                ) : (
+                                    <div className="border-2 border-dashed rounded-lg p-6 space-y-4">
+                                        <div className="flex justify-between text-sm font-medium">
+                                            <span className="text-primary flex items-center gap-2">
+                                                <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+                                                Uploading Students...
+                                            </span>
+                                            <span className="text-muted-foreground">{uploadCurrent} / {uploadTotal} ({uploadProgress}%)</span>
+                                        </div>
+                                        <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-3">
+                                            <div 
+                                                className="bg-primary h-3 rounded-full transition-all duration-300 shadow-sm" 
+                                                style={{ width: `${uploadProgress}%` }}
+                                            />
+                                        </div>
+                                        <p className="text-xs text-muted-foreground text-center animate-pulse">
+                                            Please do not close this tab. Processing row {uploadCurrent} of {uploadTotal}...
+                                        </p>
+                                    </div>
+                                )}
                                 <div className="flex gap-2">
-                                    <Button variant="outline" className="flex-1 gap-2" onClick={exportCSV}>
+                                    <Button variant="outline" className="flex-1 gap-2" onClick={exportCSV} disabled={uploading}>
                                         <Download className="w-4 h-4" /> Export CSV
                                     </Button>
-                                    <Button variant="outline" className="flex-1 gap-2" onClick={exportPDF}>
+                                    <Button variant="outline" className="flex-1 gap-2" onClick={exportPDF} disabled={uploading}>
                                         <Download className="w-4 h-4" /> Print / PDF
                                     </Button>
                                 </div>
