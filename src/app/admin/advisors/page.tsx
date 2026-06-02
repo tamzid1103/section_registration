@@ -8,7 +8,8 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { UserPlus, Trash2, ChevronLeft, Plus, Upload, Download, FileText } from 'lucide-react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { UserPlus, Trash2, ChevronLeft, Plus, Upload, Download, FileText, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import Link from 'next/link'
 
@@ -17,6 +18,13 @@ export default function AdminAdvisorsPage() {
     const [semesters, setSemesters] = useState<any[]>([])
     const [ranges, setRanges] = useState<any[]>([])
     const [loading, setLoading] = useState(false)
+
+    // Edit advisor states
+    const [editAdvisor, setEditAdvisor] = useState<any | null>(null)
+    const [editName, setEditName] = useState('')
+    const [editEmail, setEditEmail] = useState('')
+    const [editPhone, setEditPhone] = useState('')
+    const [editDesignation, setEditDesignation] = useState('')
 
     // Upload progress states
     const [uploading, setUploading] = useState(false)
@@ -85,6 +93,52 @@ export default function AdminAdvisorsPage() {
             if (adv) await supabase.from('authorized_staff').delete().eq('email', adv.email)
             fetchAll()
         }
+    }
+
+    function openEdit(adv: any) {
+        setEditAdvisor(adv)
+        setEditName(adv.name || '')
+        setEditEmail(adv.email || '')
+        setEditPhone(adv.phone || '')
+        setEditDesignation(adv.designation || '')
+    }
+
+    async function handleEditSave(e: React.FormEvent) {
+        e.preventDefault()
+        if (!editAdvisor) return
+        setLoading(true)
+        
+        const oldEmail = editAdvisor.email
+        const newEmailTrim = editEmail.trim().toLowerCase()
+        const newNameTrim = editName.trim()
+        
+        const { error } = await supabase.from('advisors').update({
+            name: newNameTrim,
+            email: newEmailTrim,
+            phone: editPhone.trim() || null,
+            designation: editDesignation.trim() || null
+        }).eq('id', editAdvisor.id)
+        
+        if (error) {
+            toast.error(error.message.includes('duplicate') ? 'Email already in use.' : error.message)
+            setLoading(false)
+            return
+        }
+        
+        if (oldEmail.toLowerCase() !== newEmailTrim) {
+            await supabase.from('authorized_staff')
+                .update({ email: newEmailTrim, name: newNameTrim })
+                .eq('email', oldEmail)
+        } else {
+            await supabase.from('authorized_staff')
+                .update({ name: newNameTrim })
+                .eq('email', oldEmail)
+        }
+        
+        toast.success('Advisor info updated.')
+        setEditAdvisor(null)
+        fetchAll()
+        setLoading(false)
     }
 
     function parseCSVRow(row: string) {
@@ -565,13 +619,21 @@ export default function AdminAdvisorsPage() {
                                     <TableCell className="text-sm">{a.phone || '—'}</TableCell>
                                     <TableCell className="text-sm">{a.designation || '—'}</TableCell>
                                     <TableCell className="text-right">
-                                        <Button
-                                            size="sm" variant="ghost"
-                                            className="text-destructive"
-                                            onClick={() => handleDeleteAdvisor(a.id)}
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
+                                        <div className="flex justify-end gap-1">
+                                            <Button
+                                                size="sm" variant="ghost"
+                                                onClick={() => openEdit(a)}
+                                            >
+                                                <Pencil className="h-4 w-4" />
+                                            </Button>
+                                            <Button
+                                                size="sm" variant="ghost"
+                                                className="text-destructive"
+                                                onClick={() => handleDeleteAdvisor(a.id)}
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </div>
                                     </TableCell>
                                 </TableRow>
                             ))}
@@ -634,6 +696,41 @@ export default function AdminAdvisorsPage() {
                     </Table>
                 </CardContent>
             </Card>
+
+            {/* Edit Advisor Dialog */}
+            <Dialog open={!!editAdvisor} onOpenChange={v => !v && setEditAdvisor(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Edit Advisor Info</DialogTitle>
+                    </DialogHeader>
+                    <form onSubmit={handleEditSave} className="space-y-4">
+                        <div className="space-y-1">
+                            <label className="text-sm font-medium">Full Name</label>
+                            <Input value={editName} onChange={e => setEditName(e.target.value)} required />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-sm font-medium">DIU Email</label>
+                            <Input type="email" value={editEmail} onChange={e => setEditEmail(e.target.value)} required />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-sm font-medium">Phone Number</label>
+                            <Input value={editPhone} onChange={e => setEditPhone(e.target.value)} />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-sm font-medium">Designation</label>
+                            <Input value={editDesignation} onChange={e => setEditDesignation(e.target.value)} />
+                        </div>
+                        <DialogFooter className="gap-2">
+                            <Button type="button" variant="outline" onClick={() => setEditAdvisor(null)} disabled={loading}>
+                                Cancel
+                            </Button>
+                            <Button type="submit" disabled={loading}>
+                                Save Changes
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }
