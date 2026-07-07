@@ -33,6 +33,56 @@ export async function POST(request: Request) {
         { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
+    // ─── Student Registration ─────────────────────────────────────────────────
+    if (type === 'student') {
+        if (!studentId) {
+            return NextResponse.json({ error: 'Student ID is required for student registration.' }, { status: 400 })
+        }
+
+        // Verify if email and student ID match in allowed_students
+        const { data: allowedRec, error: allowedErr } = await supabaseAdmin
+            .from('allowed_students')
+            .select('student_id, name')
+            .eq('email', trimmedEmail)
+            .maybeSingle()
+
+        if (allowedErr || !allowedRec) {
+            return NextResponse.json({ error: 'Your email is not authorized for student registration. Contact admin.' }, { status: 403 })
+        }
+
+        if (allowedRec.student_id.trim() !== studentId.trim()) {
+            return NextResponse.json({ error: 'Provided Student ID does not match the pre-authorized record.' }, { status: 400 })
+        }
+
+        const supabaseAnon = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+        )
+
+        const { data: signUpData, error: signUpErr } = await supabaseAnon.auth.signUp({
+            email: trimmedEmail,
+            password,
+            options: {
+                emailRedirectTo: `${request.headers.get('origin')}/auth/callback`,
+                data: {
+                    full_name: fullName,
+                    student_id: studentId
+                }
+            }
+        })
+
+        if (signUpErr) {
+            return NextResponse.json({ error: signUpErr.message }, { status: 400 })
+        }
+
+        await supabaseAdmin.from('authorized_staff').upsert(
+            { email: trimmedEmail, role: 'student', name: fullName },
+            { onConflict: 'email' }
+        )
+
+        return NextResponse.json({ success: true, message: 'Account activation link has been sent to your email. Please verify your account.' })
+    }
+
     // --- Step 1: Create auth user (email_confirm: true skips email verification) ---
     const { data: userData, error: userErr } = await supabaseAdmin.auth.admin.createUser({
         email: trimmedEmail,
