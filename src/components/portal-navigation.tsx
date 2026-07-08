@@ -70,6 +70,7 @@ export function PortalNavigation() {
             { href: '/admin', label: 'Dashboard' },
             { href: '/admin/users', label: 'Users' },
             { href: '/admin/advisors', label: 'Advisors' },
+            { href: '/admin/eligible-students', label: 'Eligible Students' },
             { href: '/admin/semesters', label: 'Semesters' },
             { href: '/admin/sections', label: 'Sections' },
         ],
