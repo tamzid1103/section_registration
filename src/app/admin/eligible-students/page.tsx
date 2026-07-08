@@ -199,33 +199,75 @@ export default function AdminEligibleStudentsPage() {
         setUploadCurrent(0)
 
         try {
-            const text = await file.text()
-            const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
-            if (lines.length <= 1) {
-                toast.error('The CSV file is empty or has no data rows.')
-                setUploading(false)
-                return
+            const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls')
+            let rows: string[][] = []
+            let studentIdIdx = -1
+            let nameIdx = -1
+            let emailIdx = -1
+
+            if (isExcel) {
+                const XLSX = await import('xlsx')
+                const data = await file.arrayBuffer()
+                const workbook = XLSX.read(data, { type: 'array' })
+                const firstSheetName = workbook.SheetNames[0]
+                const worksheet = workbook.Sheets[firstSheetName]
+                const jsonSheet = XLSX.utils.sheet_to_json<any[]>(worksheet, { header: 1 })
+                if (jsonSheet.length <= 1) {
+                    toast.error('The Excel file is empty or has no data rows.')
+                    setUploading(false)
+                    return
+                }
+
+                const headers = jsonSheet[0].map((h: any) => String(h || '').trim().toLowerCase())
+                studentIdIdx = headers.findIndex(h => h.includes('id') || h.includes('student_id'))
+                nameIdx = headers.indexOf('name')
+                emailIdx = headers.indexOf('email')
+
+                if (studentIdIdx === -1 || nameIdx === -1 || emailIdx === -1) {
+                    toast.error('Excel header must contain "student_id", "name", and "email" columns.')
+                    setUploading(false)
+                    return
+                }
+
+                rows = jsonSheet.slice(1).map((row: any) => {
+                    // Normalize cell values to strings
+                    const length = Math.max(studentIdIdx + 1, nameIdx + 1, emailIdx + 1, row.length)
+                    const normalized = []
+                    for (let idx = 0; idx < length; idx++) {
+                        normalized.push(row[idx] !== undefined && row[idx] !== null ? String(row[idx]).trim() : '')
+                    }
+                    return normalized
+                })
+            } else {
+                const text = await file.text()
+                const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
+                if (lines.length <= 1) {
+                    toast.error('The CSV file is empty or has no data rows.')
+                    setUploading(false)
+                    return
+                }
+
+                const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/^"|"$/g, ''))
+                studentIdIdx = headers.findIndex(h => h.includes('id') || h.includes('student_id'))
+                nameIdx = headers.indexOf('name')
+                emailIdx = headers.indexOf('email')
+
+                if (studentIdIdx === -1 || nameIdx === -1 || emailIdx === -1) {
+                    toast.error('CSV header must contain "student_id", "name", and "email" columns.')
+                    setUploading(false)
+                    return
+                }
+
+                rows = lines.slice(1).map(row => parseCSVRow(row))
             }
 
-            const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/^"|"$/g, ''))
-            const studentIdIdx = headers.findIndex(h => h.includes('id') || h.includes('student_id'))
-            const nameIdx = headers.indexOf('name')
-            const emailIdx = headers.indexOf('email')
-
-            if (studentIdIdx === -1 || nameIdx === -1 || emailIdx === -1) {
-                toast.error('CSV header must contain "student_id", "name", and "email" columns.')
-                setUploading(false)
-                return
-            }
-
-            const rows = lines.slice(1)
             setUploadTotal(rows.length)
             let success = 0
             let skipped = 0
             let failed = 0
 
             for (let i = 0; i < rows.length; i++) {
-                const cols = parseCSVRow(rows[i])
+                const cols = rows[i]
                 const rowStudentId = cols[studentIdIdx]
                 const rowName = cols[nameIdx]
                 const rowEmail = cols[emailIdx]
@@ -279,7 +321,7 @@ export default function AdminEligibleStudentsPage() {
             toast.success(`Import complete: ${success} added, ${skipped} duplicates skipped, ${failed} failed.`)
             fetchStudents()
         } catch (err: any) {
-            toast.error(`Error importing CSV: ${err.message}`)
+            toast.error(`Error importing file: ${err.message}`)
         } finally {
             setUploading(false)
             if (csvRef.current) csvRef.current.value = ''
@@ -388,7 +430,7 @@ export default function AdminEligibleStudentsPage() {
                                 </TabsContent>
 
                                 <TabsContent value="bulk" className="space-y-4">
-                                    <p className="text-xs text-muted-foreground">Upload a CSV file containing <strong>student_id</strong>, <strong>name</strong>, and <strong>email</strong> columns.</p>
+                                    <p className="text-xs text-muted-foreground">Upload a CSV or Excel file containing <strong>student_id</strong>, <strong>name</strong>, and <strong>email</strong> columns.</p>
                                     <div className="flex gap-2">
                                         <Button variant="outline" size="sm" onClick={downloadTemplate} className="w-full">
                                             <Download className="h-3.5 w-3.5 mr-1" /> Template CSV
@@ -398,14 +440,14 @@ export default function AdminEligibleStudentsPage() {
                                         <Input
                                             type="file"
                                             ref={csvRef}
-                                            accept=".csv"
+                                            accept=".csv, .xlsx, .xls"
                                             onChange={handleCSVImport}
                                             disabled={uploading}
                                             className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                                         />
                                         <Upload className="h-8 w-8 mx-auto text-slate-400 mb-2" />
-                                        <p className="text-sm font-medium">Click or drag CSV here</p>
-                                        <p className="text-xs text-muted-foreground mt-1">Accepts only .csv files</p>
+                                        <p className="text-sm font-medium">Click or drag CSV or Excel sheet here</p>
+                                        <p className="text-xs text-muted-foreground mt-1">Accepts .csv, .xlsx, .xls files</p>
                                     </div>
 
                                     {uploading && (
