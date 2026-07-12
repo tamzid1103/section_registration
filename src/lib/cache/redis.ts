@@ -6,60 +6,87 @@ type CacheLoader<T> = () => Promise<T>
 
 type RedisClient = ReturnType<typeof createClient>
 
+// While Redis is unreachable, stop dialling it for this long. Without a cooldown
+// every request pays the full connect timeout; with it, only one request per
+// window does, and the cache recovers on its own once Redis is back.
+const CIRCUIT_COOLDOWN_MS = 60_000
+
 // Promise resolves to a Redis client or null when unavailable
 let redisClientPromise: Promise<RedisClient | null> | null = null
+let activeClient: RedisClient | null = null
+let circuitOpenUntil = 0
+let failureLogged = false
 
 function getRedisUrl() {
     return process.env.REDIS_URL || process.env.REDIS_CONNECTION_URL || ''
+}
+
+// Drop the client and refuse new connections until the cooldown expires. The next
+// call after that reconnects from scratch, so a transient outage no longer disables
+// caching for the life of the process.
+function tripCircuit(reason: string, error: unknown) {
+    circuitOpenUntil = Date.now() + CIRCUIT_COOLDOWN_MS
+    redisClientPromise = null
+
+    if (activeClient) {
+        const client = activeClient
+        activeClient = null
+        try {
+            client.destroy()
+        } catch {
+            // already closed — nothing to release
+        }
+    }
+
+    // node-redis emits 'error' for every failed socket attempt, so log only the
+    // first failure of an outage rather than one line per retry.
+    if (!failureLogged) {
+        failureLogged = true
+        const message = error instanceof Error ? error.message : String(error)
+        console.error(`[redis] ${reason}: ${message} — cache bypassed, retrying in ${CIRCUIT_COOLDOWN_MS / 1000}s`)
+    }
 }
 
 async function getRedisClient() {
     const redisUrl = getRedisUrl()
     if (!redisUrl) return null
 
+    if (Date.now() < circuitOpenUntil) return null
+
     if (!redisClientPromise) {
         try {
             const parsed = new URL(redisUrl)
-            const host = parsed.hostname
-            const port = parsed.port ? Number(parsed.port) : undefined
-            const username = parsed.username || undefined
-            const password = parsed.password || undefined
-            const useTls = parsed.protocol === 'rediss:'
 
             const client = createClient({
                 socket: {
-                    host,
-                    port,
+                    host: parsed.hostname,
+                    port: parsed.port ? Number(parsed.port) : undefined,
                     // short connect timeout to fail fast in case of network issues
                     connectTimeout: 2000,
-                    // When using TLS, provide SNI servername and allow toggling cert validation
-                    tls: useTls ? true : undefined,
-                    reconnectStrategy: (retries) => {
-                        if (retries > 2) {
-                            return false; // Stop retrying after 3 attempts
-                        }
-                        return 500; // Wait 500ms before retrying
-                    },
+                    tls: parsed.protocol === 'rediss:' ? true : undefined,
+                    // The circuit breaker owns retry timing, so don't also retry here.
+                    reconnectStrategy: false,
                 },
-                username,
-                password,
+                username: parsed.username || undefined,
+                password: parsed.password || undefined,
                 // don't queue commands while offline to avoid request buildup
-                disableOfflineQueue: true as any,
+                disableOfflineQueue: true,
             })
 
-            client.on('error', (error) => {
-                console.error('[redis] client error', error)
-            })
+            activeClient = client
+            client.on('error', (error) => tripCircuit('client error', error))
 
-            // Ensure connect failures resolve to null instead of leaving a rejected promise
             redisClientPromise = client.connect()
-                .then(() => client as RedisClient)
-                .catch((err) => {
-                    console.error('[redis] connect failed', err)
+                .then(() => {
+                    failureLogged = false
+                    return client as RedisClient
+                })
+                .catch((error) => {
+                    tripCircuit('connect failed', error)
                     return null
                 })
-        } catch (err) {
-            console.error('[redis] invalid REDIS_URL', err)
+        } catch (error) {
+            tripCircuit('invalid REDIS_URL', error)
             return null
         }
     }
