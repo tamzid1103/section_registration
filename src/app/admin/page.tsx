@@ -160,7 +160,7 @@ export default function AdminDashboard() {
                         <Button variant="outline" className="w-full justify-start gap-2" asChild>
                             <Link href="/admin/advisors"><GraduationCap className="h-4 w-4" /> Manage Advisors</Link>
                         </Button>
-                        <Button variant="default" className="w-full justify-start gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow hover:from-blue-700 hover:to-indigo-700" asChild>
+                        <Button variant="outline" className="w-full justify-start gap-2" asChild>
                             <Link href="/admin/eligible-students"><Users className="h-4 w-4" /> Manage Eligible Students</Link>
                         </Button>
                         <Button variant="outline" className="w-full justify-start gap-2" asChild>

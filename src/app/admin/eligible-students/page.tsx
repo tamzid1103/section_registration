@@ -385,9 +385,19 @@ export default function AdminEligibleStudentsPage() {
                         </CardHeader>
                         <CardContent>
                             <Tabs defaultValue="single">
-                                <TabsList className="grid grid-cols-2 mb-4">
-                                    <TabsTrigger value="single">Single Add</TabsTrigger>
-                                    <TabsTrigger value="bulk">Bulk Import</TabsTrigger>
+                                <TabsList className="grid grid-cols-2 gap-1 p-1 bg-slate-100 border border-slate-200/60 rounded-xl h-11 mb-6">
+                                    <TabsTrigger 
+                                        value="single"
+                                        className="rounded-lg font-semibold transition-all data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow text-slate-600 hover:text-slate-800"
+                                    >
+                                        Single Add
+                                    </TabsTrigger>
+                                    <TabsTrigger 
+                                        value="bulk"
+                                        className="rounded-lg font-semibold transition-all data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow text-slate-600 hover:text-slate-800"
+                                    >
+                                        Bulk Import
+                                    </TabsTrigger>
                                 </TabsList>
 
                                 <TabsContent value="single">
