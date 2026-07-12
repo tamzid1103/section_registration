@@ -7,8 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { Users, BookOpen, Clock, LogOut, CheckCircle2, AlertTriangle, RefreshCw, GraduationCap, Edit, ShieldAlert } from 'lucide-react'
+import { Users, BookOpen, Clock, LogOut, CheckCircle2, AlertTriangle, RefreshCw, GraduationCap, ShieldAlert } from 'lucide-react'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { invalidateCacheScopes } from '@/lib/cache/client'
@@ -18,6 +17,7 @@ export default function StudentDashboard() {
     const router = useRouter()
 
     const [loading, setLoading] = useState(true)
+    const [submitting, setSubmitting] = useState(false)
     const [user, setUser] = useState<any>(null)
     const [allowedInfo, setAllowedInfo] = useState<any>(null)
     const [semester, setSemester] = useState<any>(null)
@@ -30,21 +30,13 @@ export default function StudentDashboard() {
     const [selectedLab, setSelectedLab] = useState('')
     const [studentNote, setStudentNote] = useState('')
 
-    // Edit modal states
-    const [editOpen, setEditOpen] = useState(false)
-    const [editSection, setEditSection] = useState('')
-    const [editLab, setEditLab] = useState('')
-    const [editLabGroups, setEditLabGroups] = useState<any[]>([])
-    const [editNote, setEditNote] = useState('')
-
     useEffect(() => {
         init()
 
         // Realtime updates
         const regCh = supabase.channel('student-reg-rt')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'registrations' }, () => {
-                fetchStudentData()
-                fetchSections()
+                refreshData()
             })
             .subscribe()
 
@@ -85,51 +77,85 @@ export default function StudentDashboard() {
         setSemester(sem)
 
         if (sem) {
-            // Load sections and current registrations
-            await Promise.all([
-                fetchStudentRegistration(allowed.student_id),
-                fetchSections(sem.id)
+            // Load sections and current registrations in parallel
+            const [regRes, secRes] = await Promise.all([
+                supabase
+                    .from('registrations')
+                    .select('*, sections(name), lab_groups(name), advisors(name, email, designation)')
+                    .eq('student_id', allowed.student_id)
+                    .maybeSingle(),
+                supabase
+                    .from('sections')
+                    .select('*, registrations(id)')
+                    .eq('semester_id', sem.id)
+                    .order('name')
             ])
+
+            if (regRes.data) {
+                setRegistration(regRes.data)
+                setSelectedSection(regRes.data.section_id || '')
+                setSelectedLab(regRes.data.lab_group_id || 'none')
+                setStudentNote(regRes.data.note || '')
+
+                // Fetch lab groups for this section
+                const { data: labs } = await supabase
+                    .from('lab_groups')
+                    .select('*')
+                    .eq('section_id', regRes.data.section_id)
+                    .order('name')
+                setLabGroups(labs || [])
+            } else {
+                setRegistration(null)
+            }
+
+            if (secRes.data) {
+                const parsed = secRes.data.map(sec => ({
+                    ...sec,
+                    current: sec.registrations ? sec.registrations.length : 0
+                }))
+                setSections(parsed)
+            }
         }
 
         setLoading(false)
     }
 
-    async function fetchStudentRegistration(studentId: string) {
-        const { data } = await supabase
-            .from('registrations')
-            .select('*, sections(name), lab_groups(name), advisors(name, email, designation)')
-            .eq('student_id', studentId)
-            .maybeSingle()
-        setRegistration(data)
+    async function refreshData() {
+        if (!allowedInfo || !semester) return
+        const studentId = allowedInfo.student_id
 
-        if (data) {
-            setEditSection(data.section_id || '')
-            setEditLab(data.lab_group_id || '')
-            setEditNote(data.note || '')
-            if (data.section_id) {
-                fetchEditLabGroups(data.section_id)
-            }
+        const [regRes, secRes] = await Promise.all([
+            supabase
+                .from('registrations')
+                .select('*, sections(name), lab_groups(name), advisors(name, email, designation)')
+                .eq('student_id', studentId)
+                .maybeSingle(),
+            supabase
+                .from('sections')
+                .select('*, registrations(id)')
+                .eq('semester_id', semester.id)
+                .order('name')
+        ])
+
+        if (regRes.data) {
+            setRegistration(regRes.data)
+            setSelectedSection(regRes.data.section_id || '')
+            setSelectedLab(regRes.data.lab_group_id || 'none')
+            setStudentNote(regRes.data.note || '')
+
+            // Fetch lab groups for this section
+            const { data: labs } = await supabase
+                .from('lab_groups')
+                .select('*')
+                .eq('section_id', regRes.data.section_id)
+                .order('name')
+            setLabGroups(labs || [])
+        } else {
+            setRegistration(null)
         }
-    }
 
-    async function fetchStudentData() {
-        if (!allowedInfo) return
-        await fetchStudentRegistration(allowedInfo.student_id)
-    }
-
-    async function fetchSections(semId?: string) {
-        const targetSemId = semId || semester?.id
-        if (!targetSemId) return
-
-        const { data } = await supabase
-            .from('sections')
-            .select('*, registrations(id)')
-            .eq('semester_id', targetSemId)
-            .order('name')
-
-        if (data) {
-            const parsed = data.map(sec => ({
+        if (secRes.data) {
+            const parsed = secRes.data.map(sec => ({
                 ...sec,
                 current: sec.registrations ? sec.registrations.length : 0
             }))
@@ -137,35 +163,16 @@ export default function StudentDashboard() {
         }
     }
 
-    async function handleSectionChange(secId: string, isEdit: boolean) {
-        if (isEdit) {
-            setEditSection(secId)
-            setEditLab('')
-        } else {
-            setSelectedSection(secId)
-            setSelectedLab('')
-        }
+    async function handleSectionChange(secId: string) {
+        setSelectedSection(secId)
+        setSelectedLab('none')
 
         const { data } = await supabase
             .from('lab_groups')
             .select('*')
             .eq('section_id', secId)
             .order('name')
-
-        if (isEdit) {
-            setEditLabGroups(data || [])
-        } else {
-            setLabGroups(data || [])
-        }
-    }
-
-    async function fetchEditLabGroups(secId: string) {
-        const { data } = await supabase
-            .from('lab_groups')
-            .select('*')
-            .eq('section_id', secId)
-            .order('name')
-        setEditLabGroups(data || [])
+        setLabGroups(data || [])
     }
 
     // Auto-lookup advisor range
@@ -181,85 +188,87 @@ export default function StudentDashboard() {
         return advisorId
     }
 
-    // Initial Registration Submit
-    async function handleRegisterSubmit(e: React.FormEvent) {
+    async function handleRegisterOrEditSubmit(e: React.FormEvent) {
         e.preventDefault()
         if (!selectedSection) { toast.error('Please select a section.'); return }
         if (semester?.is_locked) { toast.error('This semester is locked. Updates are disabled.'); return }
-
-        setLoading(true)
-        const advisorId = await getAdvisorId(allowedInfo.student_id)
-
-        const { error } = await supabase.from('registrations').insert({
-            student_name: allowedInfo.name,
-            student_id: allowedInfo.student_id,
-            section_id: selectedSection,
-            lab_group_id: selectedLab || null,
-            advisor_id: advisorId,
-            entered_by: user.id,
-            note: studentNote.trim(),
-            student_edit_count: 0
-        })
-
-        if (error) {
-            toast.error(error.message.includes('full') ? 'Section capacity full.' : error.message)
-        } else {
-            // Audit Log
-            const { data: secData } = await supabase.from('sections').select('name').eq('id', selectedSection).single()
-            await supabase.from('audit_logs').insert({
-                user_id: user.id,
-                role: 'student',
-                action: 'ADD',
-                note: `Student self-registered: ${allowedInfo.name} (${allowedInfo.student_id}) selected section ${secData?.name}`
-            })
-
-            toast.success('Registration successful!')
-            await invalidateCacheScopes(['home', 'admin'])
-            init()
-        }
-        setLoading(false)
-    }
-
-    // Modify/Edit Submit
-    async function handleEditSubmit(e: React.FormEvent) {
-        e.preventDefault()
-        if (!editSection) { toast.error('Please select a section.'); return }
-        if (semester?.is_locked) { toast.error('This semester is locked. Updates are disabled.'); return }
-        if (registration && registration.student_edit_count >= 2) {
-            toast.error('You have already reached the maximum edit limit of 2 changes.')
+        
+        if (registration && registration.student_edit_count >= 3) {
+            toast.error('You have already reached the maximum edit limit of 3 changes.')
             return
         }
 
-        setLoading(true)
-        const advisorId = await getAdvisorId(allowedInfo.student_id)
-        const newEditCount = (registration?.student_edit_count || 0) + 1
+        setSubmitting(true)
+        try {
+            const advisorId = await getAdvisorId(allowedInfo.student_id)
+            const labVal = selectedLab === 'none' ? null : (selectedLab || null)
 
-        const { error } = await supabase.from('registrations').update({
-            section_id: editSection,
-            lab_group_id: editLab || null,
-            advisor_id: advisorId,
-            note: editNote.trim(),
-            student_edit_count: newEditCount
-        }).eq('id', registration.id)
+            if (registration) {
+                // Edit choice
+                const newEditCount = (registration.student_edit_count || 0) + 1
+                const { error } = await supabase.from('registrations').update({
+                    section_id: selectedSection,
+                    lab_group_id: labVal,
+                    advisor_id: advisorId,
+                    note: studentNote.trim(),
+                    student_edit_count: newEditCount
+                }).eq('id', registration.id)
 
-        if (error) {
-            toast.error(error.message.includes('full') ? 'Section capacity full.' : error.message)
-        } else {
-            // Audit Log
-            const { data: secData } = await supabase.from('sections').select('name').eq('id', editSection).single()
-            await supabase.from('audit_logs').insert({
-                user_id: user.id,
-                role: 'student',
-                action: 'EDIT',
-                note: `Student modified registration (${newEditCount}/2): ${allowedInfo.name} (${allowedInfo.student_id}) updated section to ${secData?.name}`
-            })
+                if (error) {
+                    if (error.message.includes('row-level security policy') || error.message.includes('RLS')) {
+                        toast.error('Unable to modify section. You have reached your limit of 3 changes.')
+                    } else {
+                        toast.error(error.message.includes('full') ? 'Section capacity full.' : error.message)
+                    }
+                } else {
+                    // Audit Log
+                    const { data: secData } = await supabase.from('sections').select('name').eq('id', selectedSection).single()
+                    await supabase.from('audit_logs').insert({
+                        user_id: user.id,
+                        role: 'student',
+                        action: 'EDIT',
+                        note: `Student modified registration (${newEditCount}/3): ${allowedInfo.name} (${allowedInfo.student_id}) updated section to ${secData?.name}`
+                    })
 
-            toast.success('Section choices updated successfully!')
-            setEditOpen(false)
-            await invalidateCacheScopes(['home', 'admin'])
-            init()
+                    toast.success('Section choices updated successfully!')
+                    await invalidateCacheScopes(['home', 'admin'])
+                    await refreshData()
+                }
+            } else {
+                // First time register
+                const { error } = await supabase.from('registrations').insert({
+                    student_name: allowedInfo.name,
+                    student_id: allowedInfo.student_id,
+                    section_id: selectedSection,
+                    lab_group_id: labVal,
+                    advisor_id: advisorId,
+                    entered_by: user.id,
+                    note: studentNote.trim(),
+                    student_edit_count: 0
+                })
+
+                if (error) {
+                    toast.error(error.message.includes('full') ? 'Section capacity full.' : error.message)
+                } else {
+                    // Audit Log
+                    const { data: secData } = await supabase.from('sections').select('name').eq('id', selectedSection).single()
+                    await supabase.from('audit_logs').insert({
+                        user_id: user.id,
+                        role: 'student',
+                        action: 'ADD',
+                        note: `Student self-registered: ${allowedInfo.name} (${allowedInfo.student_id}) selected section ${secData?.name}`
+                    })
+
+                    toast.success('Registration successful!')
+                    await invalidateCacheScopes(['home', 'admin'])
+                    await refreshData()
+                }
+            }
+        } catch (err: any) {
+            toast.error(err.message || 'An unexpected error occurred.')
+        } finally {
+            setSubmitting(false)
         }
-        setLoading(false)
     }
 
     async function handleLogout() {
@@ -294,132 +303,83 @@ export default function StudentDashboard() {
                 </div>
             </div>
 
-            {/* Profile info cards */}
+            {/* Profile & Action Card Layout */}
             <div className="grid md:grid-cols-3 gap-6">
-                {/* Profile Card */}
-                <Card className="md:col-span-1 border border-slate-100 shadow-sm bg-gradient-to-br from-slate-50 to-white">
-                    <CardHeader className="pb-3">
-                        <CardTitle className="text-lg font-bold flex items-center gap-2">
-                            <Users className="h-5 w-5 text-blue-600" /> My Profile
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div>
-                            <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Full Name</p>
-                            <p className="text-base font-bold text-slate-800">{allowedInfo?.name}</p>
-                        </div>
-                        <div>
-                            <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Student ID</p>
-                            <p className="text-base font-mono font-semibold text-slate-800">{allowedInfo?.student_id}</p>
-                        </div>
-                        <div>
-                            <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Registered Email</p>
-                            <p className="text-base text-slate-600 truncate">{allowedInfo?.email}</p>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                {/* Main Registration Panel */}
-                <Card className="md:col-span-2 border border-slate-100 shadow-sm">
-                    <CardHeader>
-                        <CardTitle className="text-xl font-bold flex items-center justify-between">
-                            <span>Registration Status</span>
-                            {registration && (
-                                <Badge variant={registration.advisor_completed ? 'default' : 'secondary'} className={registration.advisor_completed ? 'bg-green-600 text-white' : 'bg-amber-100 text-amber-800 border-amber-200'}>
-                                    {registration.advisor_completed ? 'Advised & Approved' : 'Approval Pending'}
-                                </Badge>
-                            )}
-                        </CardTitle>
-                        <CardDescription>Review or set your section details.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-6">
-                        {registration ? (
-                            <div className="space-y-6">
-                                <div className="grid grid-cols-2 gap-4 border rounded-xl p-5 bg-slate-50/50">
+                {/* Unified Section Selection/Modification - Left 2/3 column */}
+                <div className="md:col-span-2 space-y-6">
+                    <Card className="border border-slate-100 shadow-md">
+                        <CardHeader className="bg-gradient-to-r from-blue-500/10 to-indigo-500/10 border-b pb-4">
+                            <CardTitle className="text-xl font-bold flex items-center justify-between">
+                                <span className="flex items-center gap-2">
+                                    <BookOpen className="h-5 w-5 text-blue-600" />
+                                    Choose Your Section Choice
+                                </span>
+                                {registration && (
+                                    <Badge variant={registration.advisor_completed ? 'default' : 'secondary'} className={registration.advisor_completed ? 'bg-green-600 text-white' : 'bg-amber-100 text-amber-800 border-amber-200'}>
+                                        {registration.advisor_completed ? 'Approved by Advisor' : 'Pending Advisor Approval'}
+                                    </Badge>
+                                )}
+                            </CardTitle>
+                            <CardDescription>Select your desired section and lab group below.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="pt-6 space-y-6">
+                            {/* Warning alert when limit is reached */}
+                            {registration && registration.student_edit_count >= 3 ? (
+                                <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex gap-3 text-red-800 text-sm">
+                                    <ShieldAlert className="h-5 w-5 flex-shrink-0 text-red-600" />
                                     <div>
-                                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Section</p>
-                                        <p className="text-lg font-extrabold text-slate-900">Section {registration.sections?.name}</p>
+                                        <p className="font-bold text-red-900">Change Limit Reached (3/3 edits)</p>
+                                        <p className="mt-1">You have reached the maximum allowed limit of 3 section changes. You can no longer modify your selection. If you need any further changes, please contact your CR or assigned Advisor to modify on your behalf.</p>
                                     </div>
-                                    <div>
-                                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Lab Group</p>
-                                        <p className="text-lg font-bold text-slate-900">{registration.lab_groups?.name || 'None Selected'}</p>
-                                    </div>
-                                    <div className="col-span-2 border-t pt-3 mt-1">
-                                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-1">
-                                            <GraduationCap className="h-4 w-4 text-blue-500" /> Assigned Advisor
-                                        </p>
-                                        {registration.advisors ? (
-                                            <div>
-                                                <p className="text-base font-bold text-slate-800">{registration.advisors.name}</p>
-                                                <p className="text-xs text-slate-500">{registration.advisors.designation || 'Faculty Member'} | {registration.advisors.email}</p>
-                                            </div>
-                                        ) : (
-                                            <p className="text-sm text-slate-500 italic">No advisor range matched.</p>
-                                        )}
-                                    </div>
-                                    {registration.note && (
-                                        <div className="col-span-2 border-t pt-3 mt-1">
-                                            <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">My Note</p>
-                                            <p className="text-sm text-slate-600 bg-white p-2 rounded-lg border border-slate-100 italic mt-1">"{registration.note}"</p>
-                                        </div>
-                                    )}
-                                    {registration.advisor_note && (
-                                        <div className="col-span-2 border-t pt-3 mt-1 bg-amber-50/40 p-3 rounded-lg border border-amber-100">
-                                            <p className="text-xs font-semibold text-amber-700 uppercase tracking-widest">Advisor Feedback</p>
-                                            <p className="text-sm text-amber-800 mt-1">"{registration.advisor_note}"</p>
-                                        </div>
-                                    )}
                                 </div>
-
-                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 border rounded-xl">
-                                    <div className="space-y-1">
-                                        <p className="text-sm font-semibold text-slate-800 flex items-center gap-1.5">
-                                            <Clock className="h-4 w-4 text-blue-600" /> Change Section limit
-                                        </p>
-                                        <p className="text-xs text-slate-500">
-                                            You can modify your section choice at most 2 times. Remaining changes: <strong>{2 - registration.student_edit_count}</strong>.
-                                        </p>
-                                    </div>
-
-                                    {registration.student_edit_count < 2 && !semester?.is_locked ? (
-                                        <Button onClick={() => setEditOpen(true)} className="w-full sm:w-auto">
-                                            <Edit className="h-4 w-4 mr-2" /> Modify Section
-                                        </Button>
-                                    ) : (
-                                        <Badge className="bg-red-50 text-red-700 border-red-200 py-1.5 px-3 flex gap-1.5 items-center">
-                                            <ShieldAlert className="h-4 w-4 shrink-0" /> Edit Limit Reached / Semester Locked
-                                        </Badge>
-                                    )}
-                                </div>
-                            </div>
-                        ) : (
-                            <form onSubmit={handleRegisterSubmit} className="space-y-6">
+                            ) : semester?.is_locked ? (
                                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 text-amber-800 text-sm">
                                     <AlertTriangle className="h-5 w-5 flex-shrink-0 text-amber-600" />
-                                    <p>You have not registered for any section yet. Choose your preferred section below. Make sure to check the live section capacity before submitting.</p>
+                                    <div>
+                                        <p className="font-bold">Semester Registration Locked</p>
+                                        <p className="mt-1">Registration/updates are locked for this semester. Modifying choices is disabled.</p>
+                                    </div>
                                 </div>
+                            ) : null}
 
+                            <form onSubmit={handleRegisterOrEditSubmit} className="space-y-6">
                                 <div className="grid sm:grid-cols-2 gap-4">
                                     <div className="space-y-1.5">
                                         <label className="text-sm font-semibold">Select Section</label>
-                                        <Select value={selectedSection} onValueChange={(v) => handleSectionChange(v, false)}>
-                                            <SelectTrigger>
+                                        <Select 
+                                            value={selectedSection} 
+                                            onValueChange={handleSectionChange}
+                                            disabled={submitting || (registration && registration.student_edit_count >= 3) || semester?.is_locked}
+                                        >
+                                            <SelectTrigger className="h-11">
                                                 <SelectValue placeholder="Choose a section..." />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                {sections.map(sec => (
-                                                    <SelectItem key={sec.id} value={sec.id} disabled={sec.current >= sec.capacity}>
-                                                        Section {sec.name} ({sec.current}/{sec.capacity} filled) {sec.current >= sec.capacity ? '- FULL' : ''}
-                                                    </SelectItem>
-                                                ))}
+                                                {sections.map(sec => {
+                                                    const isCurrentSec = registration && registration.section_id === sec.id;
+                                                    const isFull = sec.current >= sec.capacity;
+                                                    return (
+                                                        <SelectItem 
+                                                            key={sec.id} 
+                                                            value={sec.id} 
+                                                            disabled={isFull && !isCurrentSec}
+                                                        >
+                                                            Section {sec.name} ({sec.current}/{sec.capacity} filled) {isFull && !isCurrentSec ? '- FULL' : ''}
+                                                        </SelectItem>
+                                                    );
+                                                })}
                                             </SelectContent>
                                         </Select>
                                     </div>
 
                                     <div className="space-y-1.5">
                                         <label className="text-sm font-semibold">Select Lab Group (Optional)</label>
-                                        <Select value={selectedLab} onValueChange={setSelectedLab} disabled={!selectedSection}>
-                                            <SelectTrigger>
+                                        <Select 
+                                            value={selectedLab} 
+                                            onValueChange={setSelectedLab} 
+                                            disabled={!selectedSection || submitting || (registration && registration.student_edit_count >= 3) || semester?.is_locked}
+                                        >
+                                            <SelectTrigger className="h-11">
                                                 <SelectValue placeholder="Choose lab group..." />
                                             </SelectTrigger>
                                             <SelectContent>
@@ -436,25 +396,101 @@ export default function StudentDashboard() {
                                     <div className="sm:col-span-2 space-y-1.5">
                                         <label className="text-sm font-semibold">Message for Advisor (Optional)</label>
                                         <Textarea
-                                            placeholder="Any note about section request or clash..."
+                                            placeholder="Write any note about your request (e.g. section clash details)..."
                                             value={studentNote}
                                             onChange={e => setStudentNote(e.target.value)}
                                             rows={3}
+                                            disabled={submitting || (registration && registration.student_edit_count >= 3) || semester?.is_locked}
                                         />
                                     </div>
                                 </div>
 
-                                <Button type="submit" className="w-full h-11 text-base font-semibold" disabled={!selectedSection}>
-                                    <CheckCircle2 className="h-5 w-5 mr-2" /> Register Section Choice
-                                </Button>
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2 border-t">
+                                    <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 bg-slate-50 border rounded-lg px-3 py-2">
+                                        <Clock className="h-3.5 w-3.5 text-blue-500" />
+                                        <span>
+                                            Changes Made: {registration?.student_edit_count || 0} / 3. Remaining: {3 - (registration?.student_edit_count || 0)}
+                                        </span>
+                                    </div>
+
+                                    <Button 
+                                        type="submit" 
+                                        className="w-full sm:w-auto h-11 px-6 text-sm font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg transition-all" 
+                                        disabled={submitting || !selectedSection || (registration && registration.student_edit_count >= 3) || semester?.is_locked}
+                                    >
+                                        {submitting ? (
+                                            <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Saving Choice...</>
+                                        ) : registration ? (
+                                            <><CheckCircle2 className="h-4 w-4 mr-2" /> Update Section Choice</>
+                                        ) : (
+                                            <><CheckCircle2 className="h-4 w-4 mr-2" /> Register Section Choice</>
+                                        )}
+                                    </Button>
+                                </div>
                             </form>
-                        )}
-                    </CardContent>
-                </Card>
+                        </CardContent>
+                    </Card>
+
+                    {/* Assigned Advisor Info card (displays below form if registered) */}
+                    {registration && (
+                        <Card className="border border-slate-100 shadow-sm">
+                            <CardHeader className="pb-3">
+                                <CardTitle className="text-sm font-bold flex items-center gap-2 uppercase tracking-wider text-slate-500">
+                                    <GraduationCap className="h-4 w-4 text-indigo-500" /> Advisor Feedback & Details
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="flex items-start gap-4">
+                                    <div className="h-10 w-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 shrink-0 font-bold">
+                                        {registration.advisors?.name?.substring(0, 2) || 'AD'}
+                                    </div>
+                                    <div>
+                                        <p className="font-bold text-slate-800">{registration.advisors?.name || 'Assigned Advisor'}</p>
+                                        <p className="text-xs text-slate-500">{registration.advisors?.designation || 'Faculty Member'} | {registration.advisors?.email || 'N/A'}</p>
+                                    </div>
+                                </div>
+                                
+                                {registration.advisor_note ? (
+                                    <div className="bg-amber-50/60 border border-amber-100 rounded-xl p-4 mt-2">
+                                        <p className="text-xs font-semibold text-amber-800 uppercase tracking-widest">Feedback from Advisor</p>
+                                        <p className="text-sm text-amber-900 mt-1 italic font-medium">"{registration.advisor_note}"</p>
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-muted-foreground italic">No feedback from advisor yet.</p>
+                                )}
+                            </CardContent>
+                        </Card>
+                    )}
+                </div>
+
+                {/* Profile Card & Info - Right 1/3 column */}
+                <div className="md:col-span-1 space-y-6">
+                    <Card className="border border-slate-100 shadow-sm bg-gradient-to-br from-slate-50 to-white">
+                        <CardHeader className="pb-3 border-b">
+                            <CardTitle className="text-lg font-bold flex items-center gap-2">
+                                <Users className="h-5 w-5 text-blue-600" /> My Profile
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4 pt-4">
+                            <div>
+                                <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Full Name</p>
+                                <p className="text-base font-bold text-slate-800">{allowedInfo?.name}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Student ID</p>
+                                <p className="text-base font-mono font-semibold text-slate-800">{allowedInfo?.student_id}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Registered Email</p>
+                                <p className="text-base text-slate-600 truncate">{allowedInfo?.email}</p>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
             </div>
 
             {/* Live capacity directory */}
-            <div className="space-y-4">
+            <div className="space-y-4 pt-4">
                 <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
                     <Users className="w-5 h-5 text-blue-600" /> Live Section Status
                 </h2>
@@ -493,70 +529,6 @@ export default function StudentDashboard() {
                     })}
                 </div>
             </div>
-
-            {/* Change Section Modal */}
-            <Dialog open={editOpen} onOpenChange={setEditOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Modify Section Registration</DialogTitle>
-                    </DialogHeader>
-                    {registration && (
-                        <form onSubmit={handleEditSubmit} className="space-y-4">
-                            <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs text-blue-700">
-                                You are modifying your choice. This counts as change <strong>{(registration.student_edit_count || 0) + 1} of 2</strong>.
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="text-sm font-semibold">Select Section</label>
-                                <Select value={editSection} onValueChange={(v) => handleSectionChange(v, true)}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Choose a section..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {sections.map(sec => (
-                                            <SelectItem key={sec.id} value={sec.id} disabled={sec.current >= sec.capacity && sec.id !== registration.section_id}>
-                                                Section {sec.name} ({sec.current}/{sec.capacity} filled) {sec.current >= sec.capacity && sec.id !== registration.section_id ? '- FULL' : ''}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="text-sm font-semibold">Select Lab Group (Optional)</label>
-                                <Select value={editLab} onValueChange={setEditLab} disabled={!editSection}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Choose lab group..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="none">No Lab Group</SelectItem>
-                                        {editLabGroups.map(lab => (
-                                            <SelectItem key={lab.id} value={lab.id}>
-                                                Lab {lab.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="text-sm font-semibold">Message for Advisor (Optional)</label>
-                                <Textarea
-                                    placeholder="Any note about section request or clash..."
-                                    value={editNote}
-                                    onChange={e => setEditNote(e.target.value)}
-                                    rows={3}
-                                />
-                            </div>
-
-                            <DialogFooter className="gap-2">
-                                <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
-                                <Button type="submit" disabled={!editSection}>Save Choice</Button>
-                            </DialogFooter>
-                        </form>
-                    )}
-                </DialogContent>
-            </Dialog>
         </div>
     )
 }

@@ -22,9 +22,11 @@ ALTER TABLE authorized_staff ADD CONSTRAINT authorized_staff_role_check CHECK (r
 ALTER TABLE registrations ADD COLUMN IF NOT EXISTS student_edit_count INTEGER DEFAULT 0;
 
 -- 4. Set up policies for allowed_students
+DROP POLICY IF EXISTS "Public read allowed_students" ON allowed_students;
 CREATE POLICY "Public read allowed_students"
   ON allowed_students FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Admin manages allowed_students" ON allowed_students;
 CREATE POLICY "Admin manages allowed_students"
   ON allowed_students FOR ALL TO authenticated
   USING (auth_user_role() IN ('admin', 'developer'));
@@ -49,7 +51,15 @@ CREATE POLICY "CR updates registrations"
     OR (
       auth_user_role() = 'student' 
       AND student_id = (SELECT student_id FROM allowed_students WHERE email = auth.jwt()->>'email' LIMIT 1)
-      AND student_edit_count < 2
+      AND student_edit_count < 3
+    )
+  )
+  WITH CHECK (
+    auth_user_role() IN ('cr', 'advisor', 'admin', 'developer')
+    OR (
+      auth_user_role() = 'student' 
+      AND student_id = (SELECT student_id FROM allowed_students WHERE email = auth.jwt()->>'email' LIMIT 1)
+      AND student_edit_count <= 3
     )
   );
 

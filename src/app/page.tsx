@@ -16,7 +16,7 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog";
-import { Search, Loader2, BookOpen, GraduationCap, Users, CheckCircle2, LogIn, LayoutDashboard, ArrowUp, InfoIcon, KeyRound, User, Shield, Clock3, Timer } from "lucide-react";
+import { Search, Loader2, BookOpen, GraduationCap, Users, CheckCircle2, LogIn, LayoutDashboard, ArrowUp, InfoIcon, KeyRound, User, Shield, Clock3, Timer, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 
@@ -55,6 +55,9 @@ export default function StudentHub() {
     const [authError, setAuthError] = useState<string | null>(null);
     const [authEmail, setAuthEmail] = useState("");
     const [authPassword, setAuthPassword] = useState("");
+    const [authConfirmPassword, setAuthConfirmPassword] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [authFullName, setAuthFullName] = useState("");
     const [authStudentId, setAuthStudentId] = useState("");
     const [authSectionInterested, setAuthSectionInterested] = useState("");
@@ -232,8 +235,13 @@ export default function StudentHub() {
         setAuthError(null);
 
         const trimmedEmail = authEmail.trim().toLowerCase();
-        if (!trimmedEmail || !authPassword || !authFullName) {
-            setAuthError("Full name, email, and password are required.");
+        if (!trimmedEmail || !authPassword || !authFullName || !authConfirmPassword) {
+            setAuthError("Full name, email, password, and confirm password are required.");
+            setAuthLoading(false);
+            return;
+        }
+        if (authPassword !== authConfirmPassword) {
+            setAuthError("Passwords do not match.");
             setAuthLoading(false);
             return;
         }
@@ -307,6 +315,10 @@ export default function StudentHub() {
     const toggleAuthMode = () => {
         setAuthMode(authMode === "login" ? "register" : "login");
         setAuthError(null);
+        setAuthPassword("");
+        setAuthConfirmPassword("");
+        setShowPassword(false);
+        setShowConfirmPassword(false);
     };
 
     const handleAuthSubmit = async (event: React.FormEvent) => {
@@ -674,14 +686,46 @@ export default function StudentHub() {
                                         </div>
 
                                         <div className="space-y-1.5">
-                                            <label className="text-sm font-medium">Password</label>
-                                            <Input
-                                                type="password"
-                                                placeholder="Enter your password"
-                                                value={authPassword}
-                                                onChange={(e) => setAuthPassword(e.target.value)}
-                                            />
-                                        </div>
+                                             <label className="text-sm font-medium">Password</label>
+                                             <div className="relative">
+                                                 <Input
+                                                     type={showPassword ? "text" : "password"}
+                                                     placeholder="Enter your password"
+                                                     value={authPassword}
+                                                     onChange={(e) => setAuthPassword(e.target.value)}
+                                                     className="pr-10"
+                                                 />
+                                                 <button
+                                                     type="button"
+                                                     onClick={() => setShowPassword(!showPassword)}
+                                                     className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700"
+                                                 >
+                                                     {showPassword ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}
+                                                 </button>
+                                             </div>
+                                         </div>
+
+                                         {authMode === "register" && (
+                                             <div className="space-y-1.5">
+                                                 <label className="text-sm font-medium">Confirm Password</label>
+                                                 <div className="relative">
+                                                     <Input
+                                                         type={showConfirmPassword ? "text" : "password"}
+                                                         placeholder="Confirm your password"
+                                                         value={authConfirmPassword}
+                                                         onChange={(e) => setAuthConfirmPassword(e.target.value)}
+                                                         className="pr-10"
+                                                     />
+                                                     <button
+                                                         type="button"
+                                                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                                         className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700"
+                                                     >
+                                                         {showConfirmPassword ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}
+                                                     </button>
+                                                 </div>
+                                             </div>
+                                         )}
 
                                         {authMode === "register" && (registerRole === "cr" || registerRole === "student") && (
                                             <div className="space-y-1.5">
