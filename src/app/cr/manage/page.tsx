@@ -18,6 +18,7 @@ import {
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { invalidateCacheScopes } from '@/lib/cache/client'
+import { getFriendlyErrorMessage } from '@/lib/utils'
 
 export default function CRManagePage() {
     const supabase = createClient()
@@ -149,9 +150,11 @@ export default function CRManagePage() {
 
         if (error) {
             const errorMessage = getLockedMessage(error.message)
-            toast.error(errorMessage.includes('full') ? errorMessage :
-                errorMessage.includes('duplicate') || errorMessage.includes('unique') ?
-                    `Student ID ${fId} is already registered.` : errorMessage)
+            if (errorMessage.toLowerCase().includes('duplicate') || errorMessage.toLowerCase().includes('unique')) {
+                toast.error(`Student ID ${fId} is already registered.`)
+            } else {
+                toast.error(getFriendlyErrorMessage(errorMessage))
+            }
             return
         }
 
@@ -175,7 +178,7 @@ export default function CRManagePage() {
         if (!confirm(`Delete ${reg.student_name} (${reg.student_id}) from section ${reg.sections?.name}?`)) return
 
         const { error } = await supabase.from('registrations').delete().eq('id', reg.id)
-        if (error) { toast.error(getLockedMessage(error.message)); return }
+        if (error) { toast.error(getFriendlyErrorMessage(getLockedMessage(error.message))); return }
 
         await supabase.from('audit_logs').insert({
             user_id: (await supabase.auth.getUser()).data.user?.id,
@@ -212,7 +215,7 @@ export default function CRManagePage() {
             section_id: editSection, lab_group_id: editLab || null, note: editNote.trim()
         }).eq('id', editReg.id)
 
-        if (error) { toast.error(getLockedMessage(error.message)); return }
+        if (error) { toast.error(getFriendlyErrorMessage(getLockedMessage(error.message))); return }
 
         await supabase.from('audit_logs').insert({
             user_id: (await supabase.auth.getUser()).data.user?.id,

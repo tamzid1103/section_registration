@@ -336,7 +336,8 @@ export default function StudentHub() {
             setLoading(true);
             const { data } = await supabase
                 .from("registrations")
-                .select("*, sections(name, id), lab_groups(name), advisors(name, phone, designation)")
+                .select("*, sections!inner(name, id, semesters!inner(is_active)), lab_groups(name), advisors(name, phone, designation)")
+                .eq("sections.semesters.is_active", true)
                 .or(`student_id.ilike.%${query}%,student_name.ilike.%${query}%`)
                 .limit(10);
             if (data) setResults(data);

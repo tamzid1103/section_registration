@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { UserPlus, Trash2, ChevronLeft, Plus, Upload, Download, FileText, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
+import { getFriendlyErrorMessage } from '@/lib/utils'
 import Link from 'next/link'
 
 export default function AdminAdvisorsPage() {
@@ -72,7 +73,7 @@ export default function AdminAdvisorsPage() {
             designation: newDesignation.trim() || null,
         })
         if (error) {
-            toast.error(error.message.includes('duplicate') ? 'Email already in advisor list.' : error.message)
+            toast.error(getFriendlyErrorMessage(error.message))
         } else {
             toast.success('Advisor added to the system.')
             setNewName(''); setNewEmail(''); setNewPhone(''); setNewDesignation('')
@@ -85,7 +86,7 @@ export default function AdminAdvisorsPage() {
         if (!confirm('Remove this advisor? Their student ID ranges will also be deleted.')) return
         const { error } = await supabase.from('advisors').delete().eq('id', id)
         if (error) {
-            toast.error(error.message)
+            toast.error(getFriendlyErrorMessage(error.message))
         } else {
             toast.success('Advisor removed.')
             // Also remove from authorized_staff
@@ -120,7 +121,7 @@ export default function AdminAdvisorsPage() {
         }).eq('id', editAdvisor.id)
         
         if (error) {
-            toast.error(error.message.includes('duplicate') ? 'Email already in use.' : error.message)
+            toast.error(getFriendlyErrorMessage(error.message))
             setLoading(false)
             return
         }
@@ -377,7 +378,7 @@ export default function AdminAdvisorsPage() {
             toast.success(`Import complete: ${success} advisors added, ${fail} failed.`)
             fetchAll()
         } catch (err: any) {
-            toast.error(`Error importing CSV: ${err.message}`)
+            toast.error(`Error importing CSV: ${getFriendlyErrorMessage(err.message)}`)
         } finally {
             setUploading(false)
             if (csvRef.current) csvRef.current.value = ''
@@ -401,7 +402,7 @@ export default function AdminAdvisorsPage() {
             end_id: rangeEnd.trim(),
         })
         if (error) {
-            toast.error(error.message)
+            toast.error(getFriendlyErrorMessage(error.message))
         } else {
             toast.success('ID range assigned.')
             setRangeStart(''); setRangeEnd(''); setRangeAdvisorId(''); setRangeSemesterId('')

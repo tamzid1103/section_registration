@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Users, Search, CheckCircle2, Circle, LogOut, Download, Printer, AlertTriangle, BookOpen, Mail } from "lucide-react";
 import { toast } from "sonner";
+import { getFriendlyErrorMessage } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 
 interface Student {
@@ -103,7 +104,7 @@ export default function AdvisorDashboard() {
             .eq("id", regId);
 
         if (error) {
-            toast.error("Failed to update: " + error.message);
+            toast.error("Failed to update: " + getFriendlyErrorMessage(error.message));
         } else {
             toast.success(current ? "Marked as pending" : "Marked as completed ✓");
             setStudents(prev =>
@@ -125,7 +126,7 @@ export default function AdvisorDashboard() {
             .eq("id", regId);
 
         if (error) {
-            toast.error("Failed to save note: " + error.message);
+            toast.error("Failed to save note: " + getFriendlyErrorMessage(error.message));
         } else {
             toast.success("Note saved");
         }

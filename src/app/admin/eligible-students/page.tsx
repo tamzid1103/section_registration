@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { UserPlus, Trash2, ChevronLeft, Plus, Upload, Download, Search, RefreshCw, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
+import { getFriendlyErrorMessage } from '@/lib/utils'
 import Link from 'next/link'
 
 export default function AdminEligibleStudentsPage() {
@@ -49,7 +50,7 @@ export default function AdminEligibleStudentsPage() {
             .select('*')
             .order('student_id', { ascending: true })
         if (error) {
-            toast.error(error.message)
+            toast.error(getFriendlyErrorMessage(error.message))
         } else {
             setStudents(data || [])
         }
@@ -101,7 +102,7 @@ export default function AdminEligibleStudentsPage() {
         })
 
         if (error) {
-            toast.error(error.message)
+            toast.error(getFriendlyErrorMessage(error.message))
         } else {
             toast.success('Student added to eligible list.')
             setName('')
@@ -116,7 +117,7 @@ export default function AdminEligibleStudentsPage() {
         if (!confirm('Are you sure you want to remove this student from the eligible list?')) return
         const { error } = await supabase.from('allowed_students').delete().eq('id', id)
         if (error) {
-            toast.error(error.message)
+            toast.error(getFriendlyErrorMessage(error.message))
         } else {
             toast.success('Student removed from eligible list.')
             fetchStudents()
@@ -152,7 +153,7 @@ export default function AdminEligibleStudentsPage() {
         }).eq('id', editStudent.id)
 
         if (error) {
-            toast.error(error.message.includes('duplicate') ? 'Student ID or Email already in use.' : error.message)
+            toast.error(getFriendlyErrorMessage(error.message))
         } else {
             // Update staff table too if email/name changes
             if (editStudent.email.toLowerCase() !== trimmedEmail) {
@@ -321,7 +322,7 @@ export default function AdminEligibleStudentsPage() {
             toast.success(`Import complete: ${success} added, ${skipped} duplicates skipped, ${failed} failed.`)
             fetchStudents()
         } catch (err: any) {
-            toast.error(`Error importing file: ${err.message}`)
+            toast.error(`Error importing file: ${getFriendlyErrorMessage(err.message)}`)
         } finally {
             setUploading(false)
             if (csvRef.current) csvRef.current.value = ''

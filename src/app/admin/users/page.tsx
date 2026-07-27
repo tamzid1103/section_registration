@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { Check, X, ShieldCheck, Mail, ArrowUpRight } from 'lucide-react'
 import { toast } from 'sonner'
+import { getFriendlyErrorMessage } from '@/lib/utils'
 
 export default function AdminUsers() {
     const [applications, setApplications] = useState<any[]>([])
@@ -46,7 +47,7 @@ export default function AdminUsers() {
         })
 
         if (staffError) {
-            toast.error("Failed to add staff: " + staffError.message)
+            toast.error("Failed to add staff: " + getFriendlyErrorMessage(staffError.message))
             return
         }
 
@@ -70,7 +71,7 @@ export default function AdminUsers() {
             .eq('id', staffId)
 
         if (error) {
-            toast.error(error.message)
+            toast.error(getFriendlyErrorMessage(error.message))
             return
         }
 

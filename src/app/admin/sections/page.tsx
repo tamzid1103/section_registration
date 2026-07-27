@@ -11,6 +11,7 @@ import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import { Plus, Trash2, ChevronLeft, Layers } from 'lucide-react'
 import { toast } from 'sonner'
+import { getFriendlyErrorMessage } from '@/lib/utils'
 import Link from 'next/link'
 import { invalidateCacheScopes } from '@/lib/cache/client'
 
@@ -59,7 +60,7 @@ export default function AdminSections() {
             .insert({ name: newName.trim(), capacity: 50, semester_id: selectedSemester })
             .select().single()
 
-        if (error) { toast.error(error.message); return }
+        if (error) { toast.error(getFriendlyErrorMessage(error.message)); return }
 
         // Auto-create 2 lab groups: sectionName + "1" and sectionName + "2"
         const lg1 = `${newName.trim()}1`
@@ -69,7 +70,7 @@ export default function AdminSections() {
             { section_id: sec.id, name: lg2, capacity: 25 },
         ])
 
-        if (lgErr) { toast.error('Section created but lab groups failed: ' + lgErr.message) }
+        if (lgErr) { toast.error('Section created but lab groups failed: ' + getFriendlyErrorMessage(lgErr.message)) }
         else { toast.success(`Section ${newName.trim()} created with lab groups ${lg1} and ${lg2}`) }
 
         await invalidateCacheScopes(['home', 'admin'])
@@ -81,7 +82,7 @@ export default function AdminSections() {
         if (!confirm(`Delete section "${sectionName}" and all its data? This cannot be undone.`)) return
 
         const { error } = await supabase.from('sections').delete().eq('id', sectionId)
-        if (error) { toast.error(error.message) }
+        if (error) { toast.error(getFriendlyErrorMessage(error.message)) }
         else {
             toast.success('Section deleted.')
             await invalidateCacheScopes(['home', 'admin'])

@@ -11,6 +11,7 @@ import { Users, BookOpen, Clock, LogOut, CheckCircle2, AlertTriangle, RefreshCw,
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { invalidateCacheScopes } from '@/lib/cache/client'
+import { getFriendlyErrorMessage } from '@/lib/utils'
 
 export default function StudentDashboard() {
     const supabase = createClient()
@@ -215,11 +216,7 @@ export default function StudentDashboard() {
                 }).eq('id', registration.id)
 
                 if (error) {
-                    if (error.message.includes('row-level security policy') || error.message.includes('RLS')) {
-                        toast.error('Unable to modify section. You have reached your limit of 3 changes.')
-                    } else {
-                        toast.error(error.message.includes('full') ? 'Section capacity full.' : error.message)
-                    }
+                    toast.error(getFriendlyErrorMessage(error.message))
                 } else {
                     // Audit Log
                     const { data: secData } = await supabase.from('sections').select('name').eq('id', selectedSection).single()
@@ -248,7 +245,7 @@ export default function StudentDashboard() {
                 })
 
                 if (error) {
-                    toast.error(error.message.includes('full') ? 'Section capacity full.' : error.message)
+                    toast.error(getFriendlyErrorMessage(error.message))
                 } else {
                     // Audit Log
                     const { data: secData } = await supabase.from('sections').select('name').eq('id', selectedSection).single()
@@ -265,7 +262,7 @@ export default function StudentDashboard() {
                 }
             }
         } catch (err: any) {
-            toast.error(err.message || 'An unexpected error occurred.')
+            toast.error(getFriendlyErrorMessage(err.message || 'An unexpected error occurred.'))
         } finally {
             setSubmitting(false)
         }
