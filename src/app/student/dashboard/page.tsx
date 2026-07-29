@@ -283,7 +283,7 @@ export default function StudentDashboard() {
     }
 
     return (
-        <div className="container mx-auto p-6 space-y-8 max-w-6xl">
+        <div className="container mx-auto px-4 py-6 sm:p-6 space-y-6 sm:space-y-8 max-w-6xl">
             {/* Header section */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-6">
                 <div>

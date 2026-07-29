@@ -647,7 +647,7 @@ export default function StudentHub() {
                                     <LogIn className="w-4 h-4" /> Student / Staff Login
                                 </button>
                             </DialogTrigger>
-                            <DialogContent className="w-[calc(100%-2rem)] sm:max-w-lg md:max-w-xl lg:max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl p-5 sm:p-6 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95 data-[state=open]:slide-in-from-top-8 data-[state=closed]:slide-out-to-top-6">
+                            <DialogContent className="w-[calc(100%-1.5rem)] sm:max-w-lg md:max-w-xl lg:max-w-2xl max-h-[85dvh] sm:max-h-[85vh] overflow-y-auto overscroll-contain touch-pan-y rounded-2xl p-4 sm:p-6 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95 data-[state=open]:slide-in-from-top-8 data-[state=closed]:slide-out-to-top-6">
                                 <DialogHeader>
                                     <div className="mx-auto mb-3 w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center">
                                         <GraduationCap className="w-7 h-7 text-white" />
