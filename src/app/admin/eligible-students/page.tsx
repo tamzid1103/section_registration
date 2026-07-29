@@ -481,14 +481,19 @@ export default function AdminEligibleStudentsPage() {
                 {/* List side */}
                 <div className="md:col-span-2 space-y-6">
                     <Card>
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 space-y-0">
                             <div>
                                 <CardTitle>Eligible Students List</CardTitle>
                                 <CardDescription>All students permitted to register</CardDescription>
                             </div>
-                            <Button size="sm" variant="outline" onClick={exportCSV} disabled={students.length === 0}>
-                                <Download className="h-4 w-4 mr-1" /> Export CSV
-                            </Button>
+                            <div className="flex items-center gap-2.5">
+                                <Badge variant="outline" className="px-3 py-1.5 text-xs font-bold bg-blue-50 text-blue-700 border-blue-200">
+                                    Total Authorized: {students.length}
+                                </Badge>
+                                <Button size="sm" variant="outline" onClick={exportCSV} disabled={students.length === 0}>
+                                    <Download className="h-4 w-4 mr-1" /> Export CSV
+                                </Button>
+                            </div>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <div className="relative">
