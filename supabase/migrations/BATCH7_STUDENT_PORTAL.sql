@@ -21,7 +21,37 @@ ALTER TABLE authorized_staff ADD CONSTRAINT authorized_staff_role_check CHECK (r
 -- 3. Add student_edit_count to registrations table
 ALTER TABLE registrations ADD COLUMN IF NOT EXISTS student_edit_count INTEGER DEFAULT 0;
 
--- 4. Set up policies for allowed_students
+-- 4. Update auth_user_role() function to detect student role from allowed_students table
+CREATE OR REPLACE FUNCTION auth_user_role()
+RETURNS TEXT
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    staff_role TEXT;
+    is_student BOOLEAN;
+BEGIN
+    -- Check authorized_staff first (cr, advisor, admin, developer)
+    SELECT role INTO staff_role FROM authorized_staff WHERE LOWER(email) = LOWER(COALESCE(auth.jwt()->>'email', '')) LIMIT 1;
+    IF staff_role IS NOT NULL THEN
+        RETURN staff_role;
+    END IF;
+
+    -- Check allowed_students for student role
+    SELECT EXISTS (
+        SELECT 1 FROM allowed_students WHERE LOWER(email) = LOWER(COALESCE(auth.jwt()->>'email', ''))
+    ) INTO is_student;
+
+    IF is_student THEN
+        RETURN 'student';
+    END IF;
+
+    RETURN NULL;
+END;
+$$;
+
+-- 5. Set up policies for allowed_students
 DROP POLICY IF EXISTS "Public read allowed_students" ON allowed_students;
 CREATE POLICY "Public read allowed_students"
   ON allowed_students FOR SELECT USING (true);
@@ -31,15 +61,15 @@ CREATE POLICY "Admin manages allowed_students"
   ON allowed_students FOR ALL TO authenticated
   USING (auth_user_role() IN ('admin', 'developer'));
 
--- 5. Update registrations policies to allow student self-registration and edits
+-- 6. Update registrations policies to allow student self-registration and edits
 DROP POLICY IF EXISTS "CR inserts registrations" ON registrations;
 CREATE POLICY "CR inserts registrations"
   ON registrations FOR INSERT TO authenticated
   WITH CHECK (
     auth_user_role() IN ('cr', 'admin', 'developer')
     OR (
-      auth_user_role() = 'student' 
-      AND student_id = (SELECT student_id FROM allowed_students WHERE email = auth.jwt()->>'email' LIMIT 1)
+      (auth_user_role() = 'student' OR LOWER(auth.jwt()->>'email') IN (SELECT LOWER(email) FROM allowed_students))
+      AND student_id = (SELECT student_id FROM allowed_students WHERE LOWER(email) = LOWER(auth.jwt()->>'email') LIMIT 1)
     )
   );
 
@@ -49,17 +79,17 @@ CREATE POLICY "CR updates registrations"
   USING (
     auth_user_role() IN ('cr', 'advisor', 'admin', 'developer')
     OR (
-      auth_user_role() = 'student' 
-      AND student_id = (SELECT student_id FROM allowed_students WHERE email = auth.jwt()->>'email' LIMIT 1)
-      AND student_edit_count < 3
+      (auth_user_role() = 'student' OR LOWER(auth.jwt()->>'email') IN (SELECT LOWER(email) FROM allowed_students))
+      AND student_id = (SELECT student_id FROM allowed_students WHERE LOWER(email) = LOWER(auth.jwt()->>'email') LIMIT 1)
+      AND COALESCE(student_edit_count, 0) < 3
     )
   )
   WITH CHECK (
     auth_user_role() IN ('cr', 'advisor', 'admin', 'developer')
     OR (
-      auth_user_role() = 'student' 
-      AND student_id = (SELECT student_id FROM allowed_students WHERE email = auth.jwt()->>'email' LIMIT 1)
-      AND student_edit_count <= 3
+      (auth_user_role() = 'student' OR LOWER(auth.jwt()->>'email') IN (SELECT LOWER(email) FROM allowed_students))
+      AND student_id = (SELECT student_id FROM allowed_students WHERE LOWER(email) = LOWER(auth.jwt()->>'email') LIMIT 1)
+      AND COALESCE(student_edit_count, 0) <= 3
     )
   );
 
@@ -69,7 +99,7 @@ CREATE POLICY "CR deletes registrations"
   USING (
     auth_user_role() IN ('cr', 'admin', 'developer')
     OR (
-      auth_user_role() = 'student'
-      AND student_id = (SELECT student_id FROM allowed_students WHERE email = auth.jwt()->>'email' LIMIT 1)
+      (auth_user_role() = 'student' OR LOWER(auth.jwt()->>'email') IN (SELECT LOWER(email) FROM allowed_students))
+      AND student_id = (SELECT student_id FROM allowed_students WHERE LOWER(email) = LOWER(auth.jwt()->>'email') LIMIT 1)
     )
   );

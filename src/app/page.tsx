@@ -16,7 +16,7 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog";
-import { Search, Loader2, BookOpen, GraduationCap, Users, CheckCircle2, LogIn, LayoutDashboard, ArrowUp, InfoIcon, KeyRound, User, Shield, Clock3, Timer, Eye, EyeOff } from "lucide-react";
+import { Search, Loader2, BookOpen, GraduationCap, Users, CheckCircle2, LogIn, LayoutDashboard, ArrowUp, InfoIcon, KeyRound, User, Shield, Clock3, Timer, Eye, EyeOff, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 
@@ -89,10 +89,10 @@ export default function StudentHub() {
                 .then(({ data }) => {
                     if (data?.role) {
                         setUserRole(data.role);
-                        const map: Record<string, string> = { 
-                            developer: '/developer', 
-                            admin: '/admin', 
-                            advisor: '/advisor', 
+                        const map: Record<string, string> = {
+                            developer: '/developer',
+                            admin: '/admin',
+                            advisor: '/advisor',
                             cr: '/cr/manage',
                             student: '/student/dashboard'
                         };
@@ -334,13 +334,65 @@ export default function StudentHub() {
         const search = async () => {
             if (query.length < 2) { setResults([]); return; }
             setLoading(true);
-            const { data } = await supabase
-                .from("registrations")
-                .select("*, sections!inner(name, id, semesters!inner(is_active)), lab_groups(name), advisors(name, phone, designation)")
-                .eq("sections.semesters.is_active", true)
-                .or(`student_id.ilike.%${query}%,student_name.ilike.%${query}%`)
-                .limit(10);
-            if (data) setResults(data);
+
+            const [regRes, allowedRes] = await Promise.all([
+                supabase
+                    .from("registrations")
+                    .select("*, sections!inner(name, id, semesters!inner(is_active)), lab_groups(name), advisors(name, phone, designation)")
+                    .eq("sections.semesters.is_active", true)
+                    .or(`student_id.ilike.%${query}%,student_name.ilike.%${query}%`)
+                    .limit(10),
+                supabase
+                    .from("allowed_students")
+                    .select("*")
+                    .or(`student_id.ilike.%${query}%,name.ilike.%${query}%`)
+                    .limit(10)
+            ]);
+
+            const regData = regRes.data || [];
+            const allowedData = allowedRes.data || [];
+
+            const combinedResults: any[] = [];
+            const processedStudentIds = new Set<string>();
+
+            if (allowedData.length > 0) {
+                for (const student of allowedData) {
+                    const normId = student.student_id.trim().toLowerCase();
+                    processedStudentIds.add(normId);
+
+                    const matchReg = regData.find(
+                        r => r.student_id.trim().toLowerCase() === normId
+                    );
+
+                    if (matchReg) {
+                        combinedResults.push(matchReg);
+                    } else {
+                        combinedResults.push({
+                            id: `unreg-${student.id}`,
+                            student_id: student.student_id,
+                            student_name: student.name,
+                            email: student.email,
+                            sections: null,
+                            lab_groups: null,
+                            advisors: null,
+                            advisor_completed: false,
+                            isUnregistered: true
+                        });
+                    }
+                }
+            }
+
+            if (regData.length > 0) {
+                for (const reg of regData) {
+                    const normId = reg.student_id.trim().toLowerCase();
+                    if (!processedStudentIds.has(normId)) {
+                        processedStudentIds.add(normId);
+                        combinedResults.push(reg);
+                    }
+                }
+            }
+
+            setResults(combinedResults);
             setLoading(false);
         };
         const t = setTimeout(search, 250);
@@ -471,11 +523,16 @@ export default function StudentHub() {
         return (
             <div className="space-y-4">
                 {results.length > 0 ? results.map(reg => (
-                    <Card key={reg.id} className={`bg-white shadow-lg border-l-4 ${reg.advisor_completed ? "border-l-green-500" : "border-l-blue-600"}`}>
+                    <Card key={reg.id} className={`bg-white shadow-lg border-l-4 ${reg.isUnregistered ? "border-l-amber-400" : reg.advisor_completed ? "border-l-green-500" : "border-l-blue-600"}`}>
                         <CardContent className="p-5 space-y-3">
                             {reg.advisor_completed && (
                                 <div className="flex items-center gap-2 text-green-600 text-xs font-bold bg-green-50 border border-green-200 rounded-lg px-3 py-2">
                                     <CheckCircle2 className="w-4 h-4" /> Advisor Pre-Registration Completed
+                                </div>
+                            )}
+                            {reg.isUnregistered && (
+                                <div className="flex items-center gap-2 text-amber-700 text-xs font-semibold bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                                    <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" /> Section choice pending for active semester
                                 </div>
                             )}
                             <div>
@@ -489,9 +546,15 @@ export default function StudentHub() {
                                     <div>
                                         <p className="text-[10px] font-bold text-slate-400 uppercase">Section</p>
                                         <p className="text-sm font-bold">
-                                            <Link href={`/sections/${reg.sections?.id}`} className="text-blue-600 hover:underline">
-                                                Section {reg.sections?.name}
-                                            </Link>
+                                            {reg.sections?.id ? (
+                                                <Link href={`/sections/${reg.sections?.id}`} className="text-blue-600 hover:underline">
+                                                    Section {reg.sections?.name}
+                                                </Link>
+                                            ) : (
+                                                <span className="inline-flex items-center gap-1 text-amber-600 font-bold bg-amber-100/70 border border-amber-200 px-2 py-0.5 rounded text-xs">
+                                                    Sec not selected
+                                                </span>
+                                            )}
                                         </p>
                                     </div>
                                 </div>
@@ -585,170 +648,170 @@ export default function StudentHub() {
                                 </button>
                             </DialogTrigger>
                             <DialogContent className="w-[calc(100%-2rem)] sm:max-w-lg md:max-w-xl lg:max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl p-5 sm:p-6 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95 data-[state=open]:slide-in-from-top-8 data-[state=closed]:slide-out-to-top-6">
-                                    <DialogHeader>
-                                        <div className="mx-auto mb-3 w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center">
-                                            <GraduationCap className="w-7 h-7 text-white" />
-                                        </div>
-                                        <DialogTitle className="text-center text-2xl font-bold tracking-tight">
-                                            {authMode === "login" ? "Portal Login" : "Create Account"}
-                                        </DialogTitle>
-                                        <DialogDescription className="text-center">
+                                <DialogHeader>
+                                    <div className="mx-auto mb-3 w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center">
+                                        <GraduationCap className="w-7 h-7 text-white" />
+                                    </div>
+                                    <DialogTitle className="text-center text-2xl font-bold tracking-tight">
+                                        {authMode === "login" ? "Portal Login" : "Create Account"}
+                                    </DialogTitle>
+                                    <DialogDescription className="text-center">
+                                        {authMode === "login"
+                                            ? "Login with your email or Student ID"
+                                            : "Register as Student, CR or Advisor"}
+                                    </DialogDescription>
+                                </DialogHeader>
+
+                                <form className="space-y-4" onSubmit={handleAuthSubmit}>
+                                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex gap-3 text-blue-800 text-sm">
+                                        <InfoIcon className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                                        <p>
                                             {authMode === "login"
-                                                ? "Login with your email or Student ID"
-                                                : "Register as Student, CR or Advisor"}
-                                        </DialogDescription>
-                                    </DialogHeader>
+                                                ? "Students can log in with their Student ID or university email."
+                                                : "Students must be pre-authorized by an Admin to register."
+                                            }
+                                        </p>
+                                    </div>
 
-                                    <form className="space-y-4" onSubmit={handleAuthSubmit}>
-                                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex gap-3 text-blue-800 text-sm">
-                                            <InfoIcon className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                                            <p>
-                                                {authMode === "login" 
-                                                    ? "Students can log in with their Student ID or university email."
-                                                    : "Students must be pre-authorized by an Admin to register."
-                                                }
-                                            </p>
+                                    {authMode === "register" && (
+                                        <div className="grid grid-cols-3 gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => setRegisterRole("student")}
+                                                className={`flex flex-col items-center gap-1 p-2 rounded-xl border-2 text-xs font-semibold transition-all ${registerRole === "student"
+                                                    ? "border-blue-600 bg-blue-50 text-blue-700 shadow-sm"
+                                                    : "border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50"
+                                                    }`}
+                                            >
+                                                <GraduationCap className="w-4 h-4" />
+                                                Student
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setRegisterRole("cr")}
+                                                className={`flex flex-col items-center gap-1 p-2 rounded-xl border-2 text-xs font-semibold transition-all ${registerRole === "cr"
+                                                    ? "border-blue-600 bg-blue-50 text-blue-700 shadow-sm"
+                                                    : "border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50"
+                                                    }`}
+                                            >
+                                                <Shield className="w-4 h-4" />
+                                                CR Apply
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setRegisterRole("advisor")}
+                                                className={`flex flex-col items-center gap-1 p-2 rounded-xl border-2 text-xs font-semibold transition-all ${registerRole === "advisor"
+                                                    ? "border-blue-600 bg-blue-50 text-blue-700 shadow-sm"
+                                                    : "border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50"
+                                                    }`}
+                                            >
+                                                <User className="w-4 h-4" />
+                                                Advisor
+                                            </button>
                                         </div>
+                                    )}
 
-                                        {authMode === "register" && (
-                                            <div className="grid grid-cols-3 gap-2">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setRegisterRole("student")}
-                                                    className={`flex flex-col items-center gap-1 p-2 rounded-xl border-2 text-xs font-semibold transition-all ${registerRole === "student"
-                                                        ? "border-blue-600 bg-blue-50 text-blue-700 shadow-sm"
-                                                        : "border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50"
-                                                        }`}
-                                                >
-                                                    <GraduationCap className="w-4 h-4" />
-                                                    Student
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setRegisterRole("cr")}
-                                                    className={`flex flex-col items-center gap-1 p-2 rounded-xl border-2 text-xs font-semibold transition-all ${registerRole === "cr"
-                                                        ? "border-blue-600 bg-blue-50 text-blue-700 shadow-sm"
-                                                        : "border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50"
-                                                        }`}
-                                                >
-                                                    <Shield className="w-4 h-4" />
-                                                    CR Apply
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setRegisterRole("advisor")}
-                                                    className={`flex flex-col items-center gap-1 p-2 rounded-xl border-2 text-xs font-semibold transition-all ${registerRole === "advisor"
-                                                        ? "border-blue-600 bg-blue-50 text-blue-700 shadow-sm"
-                                                        : "border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50"
-                                                        }`}
-                                                >
-                                                    <User className="w-4 h-4" />
-                                                    Advisor
-                                                </button>
-                                            </div>
-                                        )}
-
-                                        {authMode === "register" && (
-                                            <div className={`text-xs rounded-lg p-3 border ${registerRole === "cr"
-                                                ? "bg-amber-50 border-amber-200 text-amber-800"
+                                    {authMode === "register" && (
+                                        <div className={`text-xs rounded-lg p-3 border ${registerRole === "cr"
+                                            ? "bg-amber-50 border-amber-200 text-amber-800"
+                                            : registerRole === "student"
+                                                ? "bg-blue-50 border-blue-200 text-blue-800"
+                                                : "bg-green-50 border-green-200 text-green-800"
+                                            }`}>
+                                            {registerRole === "cr"
+                                                ? "CR applications require admin approval before access is granted."
                                                 : registerRole === "student"
-                                                    ? "bg-blue-50 border-blue-200 text-blue-800"
-                                                    : "bg-green-50 border-green-200 text-green-800"
-                                                }`}>
-                                                {registerRole === "cr"
-                                                    ? "CR applications require admin approval before access is granted."
-                                                    : registerRole === "student"
-                                                        ? "Student accounts are auto-approved if pre-authorized by an admin. An activation link will be sent."
-                                                        : "Advisor accounts are auto-approved if your email is registered in the system."}
-                                            </div>
-                                        )}
+                                                    ? "Student accounts are auto-approved if pre-authorized by an admin. An activation link will be sent."
+                                                    : "Advisor accounts are auto-approved if your email is registered in the system."}
+                                        </div>
+                                    )}
 
-                                        {authMode === "register" && (
-                                            <div className="space-y-1.5">
-                                                <label className="text-sm font-medium">Full Name</label>
-                                                <Input
-                                                    placeholder="Your full name"
-                                                    value={authFullName}
-                                                    onChange={(e) => setAuthFullName(e.target.value)}
-                                                />
-                                            </div>
-                                        )}
-
+                                    {authMode === "register" && (
                                         <div className="space-y-1.5">
-                                            <label className="text-sm font-medium">
-                                                {authMode === "register" ? "Email" : "Email or Student ID"}
-                                            </label>
+                                            <label className="text-sm font-medium">Full Name</label>
                                             <Input
-                                                type="text"
-                                                placeholder={authMode === "register" ? "name@diu.edu.bd" : "Enter email or student ID"}
-                                                value={authEmail}
-                                                onChange={(e) => setAuthEmail(e.target.value)}
+                                                placeholder="Your full name"
+                                                value={authFullName}
+                                                onChange={(e) => setAuthFullName(e.target.value)}
                                             />
                                         </div>
+                                    )}
 
+                                    <div className="space-y-1.5">
+                                        <label className="text-sm font-medium">
+                                            {authMode === "register" ? "Email" : "Email or Student ID"}
+                                        </label>
+                                        <Input
+                                            type="text"
+                                            placeholder={authMode === "register" ? "name@diu.edu.bd" : "Enter email or student ID"}
+                                            value={authEmail}
+                                            onChange={(e) => setAuthEmail(e.target.value)}
+                                        />
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                        <label className="text-sm font-medium">Password</label>
+                                        <div className="relative">
+                                            <Input
+                                                type={showPassword ? "text" : "password"}
+                                                placeholder="Enter your password"
+                                                value={authPassword}
+                                                onChange={(e) => setAuthPassword(e.target.value)}
+                                                className="pr-10"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowPassword(!showPassword)}
+                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700"
+                                            >
+                                                {showPassword ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {authMode === "register" && (
                                         <div className="space-y-1.5">
-                                             <label className="text-sm font-medium">Password</label>
-                                             <div className="relative">
-                                                 <Input
-                                                     type={showPassword ? "text" : "password"}
-                                                     placeholder="Enter your password"
-                                                     value={authPassword}
-                                                     onChange={(e) => setAuthPassword(e.target.value)}
-                                                     className="pr-10"
-                                                 />
-                                                 <button
-                                                     type="button"
-                                                     onClick={() => setShowPassword(!showPassword)}
-                                                     className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700"
-                                                 >
-                                                     {showPassword ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}
-                                                 </button>
-                                             </div>
-                                         </div>
-
-                                         {authMode === "register" && (
-                                             <div className="space-y-1.5">
-                                                 <label className="text-sm font-medium">Confirm Password</label>
-                                                 <div className="relative">
-                                                     <Input
-                                                         type={showConfirmPassword ? "text" : "password"}
-                                                         placeholder="Confirm your password"
-                                                         value={authConfirmPassword}
-                                                         onChange={(e) => setAuthConfirmPassword(e.target.value)}
-                                                         className="pr-10"
-                                                     />
-                                                     <button
-                                                         type="button"
-                                                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                                         className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700"
-                                                     >
-                                                         {showConfirmPassword ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}
-                                                     </button>
-                                                 </div>
-                                             </div>
-                                         )}
-
-                                        {authMode === "register" && (registerRole === "cr" || registerRole === "student") && (
-                                            <div className="space-y-1.5">
-                                                <label className="text-sm font-medium">Your Student ID</label>
+                                            <label className="text-sm font-medium">Confirm Password</label>
+                                            <div className="relative">
                                                 <Input
-                                                    placeholder="241-15-877"
-                                                    value={authStudentId}
-                                                    onChange={(e) => setAuthStudentId(e.target.value)}
+                                                    type={showConfirmPassword ? "text" : "password"}
+                                                    placeholder="Confirm your password"
+                                                    value={authConfirmPassword}
+                                                    onChange={(e) => setAuthConfirmPassword(e.target.value)}
+                                                    className="pr-10"
                                                 />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700"
+                                                >
+                                                    {showConfirmPassword ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}
+                                                </button>
                                             </div>
-                                        )}
+                                        </div>
+                                    )}
 
-                                        {authMode === "register" && registerRole === "cr" && (
-                                            <div className="space-y-1.5">
-                                                <label className="text-sm font-medium">Section You Want to Manage</label>
-                                                <Input
-                                                    placeholder="e.g. 66_A"
-                                                    value={authSectionInterested}
-                                                    onChange={(e) => setAuthSectionInterested(e.target.value)}
-                                                />
-                                            </div>
-                                        )}
+                                    {authMode === "register" && (registerRole === "cr" || registerRole === "student") && (
+                                        <div className="space-y-1.5">
+                                            <label className="text-sm font-medium">Your Student ID</label>
+                                            <Input
+                                                placeholder="241-15-877"
+                                                value={authStudentId}
+                                                onChange={(e) => setAuthStudentId(e.target.value)}
+                                            />
+                                        </div>
+                                    )}
+
+                                    {authMode === "register" && registerRole === "cr" && (
+                                        <div className="space-y-1.5">
+                                            <label className="text-sm font-medium">Section You Want to Manage</label>
+                                            <Input
+                                                placeholder="e.g. 66_A"
+                                                value={authSectionInterested}
+                                                onChange={(e) => setAuthSectionInterested(e.target.value)}
+                                            />
+                                        </div>
+                                    )}
 
                                     {authError && (
                                         <div className="bg-red-50 border border-red-200 rounded-lg p-3">
