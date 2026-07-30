@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription
 } from "@/components/ui/dialog";
-import { Users, Search, CheckCircle2, Circle, LogOut, Download, Printer, AlertTriangle, BookOpen, Mail } from "lucide-react";
+import { Users, Search, CheckCircle2, Circle, LogOut, Download, Printer, AlertTriangle, BookOpen, Mail, CalendarDays } from "lucide-react";
 import { toast } from "sonner";
 import { getFriendlyErrorMessage } from "@/lib/utils";
 import { useRouter } from "next/navigation";
@@ -31,10 +31,19 @@ interface Student {
     created_at: string;
 }
 
+interface Semester {
+    id: string;
+    name: string;
+    is_active: boolean;
+    is_locked: boolean;
+}
+
 export default function AdvisorDashboard() {
     const [loading, setLoading] = useState(true);
     const [students, setStudents] = useState<Student[]>([]);
-    const [advisorInfo, setAdvisorInfo] = useState<{ name: string; ranges: any[] } | null>(null);
+    const [advisorInfo, setAdvisorInfo] = useState<{ id: string; name: string; ranges: any[] } | null>(null);
+    const [semesters, setSemesters] = useState<Semester[]>([]);
+    const [selectedSemesterId, setSelectedSemesterId] = useState<string>("");
     const [searchQuery, setSearchQuery] = useState("");
     const [sortBy, setSortBy] = useState("id");
     const [toggling, setToggling] = useState<string | null>(null);
@@ -44,7 +53,7 @@ export default function AdvisorDashboard() {
     const router = useRouter();
 
     useEffect(() => {
-        fetchAdvisorData();
+        initAdvisorPortal();
         fetchCRs();
     }, []);
 
@@ -53,9 +62,13 @@ export default function AdvisorDashboard() {
         if (data) setCrs(data);
     }
 
-    async function fetchAdvisorData() {
+    async function initAdvisorPortal() {
+        setLoading(true);
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+        if (!user) {
+            setLoading(false);
+            return;
+        }
 
         const { data: advisorData } = await supabase
             .from("advisors")
@@ -69,14 +82,45 @@ export default function AdvisorDashboard() {
         }
 
         setAdvisorInfo({
+            id: advisorData.id,
             name: advisorData.name,
             ranges: advisorData.student_advisor_ranges as any[],
         });
 
+        // Fetch all semesters to populate selector (defaulting to active semester)
+        const { data: semestersData } = await supabase
+            .from("semesters")
+            .select("id, name, is_active, is_locked")
+            .order("created_at", { ascending: false });
+
+        if (semestersData && semestersData.length > 0) {
+            setSemesters(semestersData);
+            const activeSem = semestersData.find(s => s.is_active) || semestersData[0];
+            setSelectedSemesterId(activeSem.id);
+            await fetchRegistrationsForSemester(advisorData.id, activeSem.id);
+        } else {
+            setLoading(false);
+        }
+    }
+
+    async function fetchRegistrationsForSemester(advisorId: string, semesterId: string) {
+        if (!advisorId || !semesterId) return;
+        setLoading(true);
+
         const { data: regData } = await supabase
             .from("registrations")
-            .select(`id, student_id, student_name, advisor_completed, advisor_note, timestamp, sections(name), lab_groups(name)`)
-            .eq("advisor_id", advisorData.id)
+            .select(`
+                id, 
+                student_id, 
+                student_name, 
+                advisor_completed, 
+                advisor_note, 
+                timestamp, 
+                sections!inner(name, semester_id), 
+                lab_groups(name)
+            `)
+            .eq("advisor_id", advisorId)
+            .eq("sections.semester_id", semesterId)
             .order("student_id", { ascending: true });
 
         if (regData) {
@@ -92,8 +136,17 @@ export default function AdvisorDashboard() {
                     created_at: new Date(r.timestamp).toLocaleDateString(),
                 }))
             );
+        } else {
+            setStudents([]);
         }
         setLoading(false);
+    }
+
+    async function handleSemesterChange(newSemId: string) {
+        setSelectedSemesterId(newSemId);
+        if (advisorInfo?.id) {
+            await fetchRegistrationsForSemester(advisorInfo.id, newSemId);
+        }
     }
 
     async function toggleCompletion(regId: string, current: boolean) {
@@ -158,7 +211,8 @@ export default function AdvisorDashboard() {
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.setAttribute("href", url);
-        link.setAttribute("download", `Students_List_${new Date().toISOString().split('T')[0]}.csv`);
+        const semName = currentSemester?.name ? `_${currentSemester.name.replace(/\s+/g, '_')}` : '';
+        link.setAttribute("download", `Students_List${semName}_${new Date().toISOString().split('T')[0]}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -221,15 +275,24 @@ export default function AdvisorDashboard() {
         );
     }
 
+    const currentSemester = semesters.find(s => s.id === selectedSemesterId);
+
     return (
         <div className="max-w-6xl mx-auto py-10 px-6 space-y-8 print:py-0 print:px-0 print:space-y-4">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="print:w-full">
-                    <h1 className="text-3xl font-bold tracking-tight print:text-xl">Advising Roster: {advisorInfo.name}</h1>
-                    <p className="text-muted-foreground text-sm mt-1 print:hidden">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-6 print:pb-2">
+                <div className="print:w-full space-y-2">
+                    <div className="flex flex-wrap items-center gap-3">
+                        <h1 className="text-3xl font-bold tracking-tight print:text-xl">Advising Roster: {advisorInfo.name}</h1>
+                        {currentSemester && (
+                            <Badge variant={currentSemester.is_active ? "default" : "secondary"} className={currentSemester.is_active ? "bg-green-600 text-white font-bold" : "bg-amber-100 text-amber-900 border-amber-300 font-bold"}>
+                                {currentSemester.name} {currentSemester.is_active ? "(Active)" : "(Archived)"}
+                            </Badge>
+                        )}
+                    </div>
+                    <p className="text-muted-foreground text-sm print:hidden">
                         Mark students as completed once you finish their advising session.
                     </p>
-                    <div className="flex flex-wrap gap-2 mt-3 print:mt-1">
+                    <div className="flex flex-wrap gap-2 pt-1 print:mt-1">
                         {advisorInfo.ranges.map((range: any, i: number) => (
                             <Badge key={i} variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
                                 Range: {range.start_id} — {range.end_id}
@@ -237,9 +300,33 @@ export default function AdvisorDashboard() {
                         ))}
                     </div>
                 </div>
-                <Button variant="ghost" size="sm" onClick={handleLogout} className="gap-2 self-start print:hidden">
-                    <LogOut className="h-4 w-4" /> Logout
-                </Button>
+
+                <div className="flex flex-wrap items-center gap-3 print:hidden self-start md:self-center">
+                    {/* Semester Selector Dropdown */}
+                    <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl p-1.5 px-3">
+                        <CalendarDays className="h-4 w-4 text-blue-600 shrink-0" />
+                        <span className="text-xs font-bold text-slate-600 uppercase tracking-wider hidden sm:inline">Semester:</span>
+                        <Select
+                            value={selectedSemesterId}
+                            onValueChange={(val) => handleSemesterChange(val)}
+                        >
+                            <SelectTrigger className="w-[170px] h-8 text-xs font-bold bg-white border-slate-200">
+                                <SelectValue placeholder="Select semester..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {semesters.map((sem) => (
+                                    <SelectItem key={sem.id} value={sem.id} className="text-xs font-medium">
+                                        {sem.name} {sem.is_active ? " (Active)" : ""}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <Button variant="outline" size="sm" onClick={handleLogout} className="gap-2 text-slate-600 border-slate-200 hover:bg-slate-50">
+                        <LogOut className="h-4 w-4" /> Logout
+                    </Button>
+                </div>
             </div>
 
             {/* Stats */}
