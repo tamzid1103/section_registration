@@ -335,7 +335,7 @@ export default function StudentHub() {
             if (query.length < 2) { setResults([]); return; }
             setLoading(true);
 
-            const [regRes, allowedRes] = await Promise.all([
+            const [regRes, allowedRes, rangesRes, advisorsRes] = await Promise.all([
                 supabase
                     .from("registrations")
                     .select("*, sections!inner(name, id, semesters!inner(is_active)), lab_groups(name), advisors(name, phone, designation)")
@@ -346,11 +346,28 @@ export default function StudentHub() {
                     .from("allowed_students")
                     .select("*")
                     .or(`student_id.ilike.%${query}%,name.ilike.%${query}%`)
-                    .limit(10)
+                    .limit(10),
+                supabase
+                    .from("student_advisor_ranges")
+                    .select("advisor_id, start_id_numeric, end_id_numeric"),
+                supabase
+                    .from("advisors")
+                    .select("id, name, phone, designation")
             ]);
 
             const regData = regRes.data || [];
             const allowedData = allowedRes.data || [];
+            const rangesData = rangesRes.data || [];
+            const advisorsData = advisorsRes.data || [];
+
+            const resolveAdvisorForStudent = (stdId: string) => {
+                if (!stdId || rangesData.length === 0 || advisorsData.length === 0) return null;
+                const numId = parseInt(stdId.replace(/-/g, ''), 10);
+                if (isNaN(numId)) return null;
+                const rangeMatch = rangesData.find(r => numId >= Number(r.start_id_numeric) && numId <= Number(r.end_id_numeric));
+                if (!rangeMatch) return null;
+                return advisorsData.find(a => a.id === rangeMatch.advisor_id) || null;
+            };
 
             const combinedResults: any[] = [];
             const processedStudentIds = new Set<string>();
@@ -392,7 +409,12 @@ export default function StudentHub() {
                 }
             }
 
-            setResults(combinedResults);
+            const finalResults = combinedResults.map(item => ({
+                ...item,
+                advisors: item.advisors || resolveAdvisorForStudent(item.student_id)
+            }));
+
+            setResults(finalResults);
             setLoading(false);
         };
         const t = setTimeout(search, 250);

@@ -176,12 +176,12 @@ export default function StudentDashboard() {
         setLabGroups(data || [])
     }
 
-    // Auto-lookup advisor range
+    // Auto-lookup advisor range (global across semesters)
     async function getAdvisorId(studentId: string) {
         const numId = parseInt(studentId.replace(/-/g, ''))
         let advisorId: string | null = null
         const { data: ranges } = await supabase.from('student_advisor_ranges')
-            .select('advisor_id, start_id_numeric, end_id_numeric').eq('semester_id', semester.id)
+            .select('advisor_id, start_id_numeric, end_id_numeric')
         if (ranges) {
             const match = ranges.find(r => numId >= Number(r.start_id_numeric) && numId <= Number(r.end_id_numeric))
             advisorId = match?.advisor_id || null

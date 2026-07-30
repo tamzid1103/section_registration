@@ -128,11 +128,11 @@ export default function CRManagePage() {
         if (!crInfo || !semester) { toast.error('No active semester or not authorized.'); return }
         if (semester?.is_locked) { toast.error('This semester is locked. CR updates are disabled.'); return }
 
-        // Auto-lookup advisor
+        // Auto-lookup advisor (global across semesters)
         const numId = parseInt(fId.replace(/-/g, ''))
         let advisorId: string | null = null
         const { data: ranges } = await supabase.from('student_advisor_ranges')
-            .select('advisor_id, start_id_numeric, end_id_numeric').eq('semester_id', semester.id)
+            .select('advisor_id, start_id_numeric, end_id_numeric')
         if (ranges) {
             const match = ranges.find(r => numId >= Number(r.start_id_numeric) && numId <= Number(r.end_id_numeric))
             advisorId = match?.advisor_id || null
@@ -278,9 +278,9 @@ export default function CRManagePage() {
 
         let success = 0, fail = 0
 
-        // Get ranges for advisor lookup
+        // Get ranges for advisor lookup (global across semesters)
         const { data: ranges } = await supabase.from('student_advisor_ranges')
-            .select('advisor_id, start_id_numeric, end_id_numeric').eq('semester_id', semester.id)
+            .select('advisor_id, start_id_numeric, end_id_numeric')
 
         try {
             for (let i = 0; i < rows.length; i++) {
