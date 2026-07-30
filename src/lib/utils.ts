@@ -12,7 +12,7 @@ export function getFriendlyErrorMessage(message: string): string {
     
     // RLS violations
     if (lower.includes('row-level security') || lower.includes('rls') || lower.includes('policy')) {
-        return 'Access denied: You do not have permission to perform this action, or you have exceeded your modification limit.';
+        return 'Access denied: Modification not permitted (limit reached or registration completed by advisor).';
     }
     
     // Unique / Duplicate constraints

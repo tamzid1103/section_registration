@@ -82,6 +82,7 @@ CREATE POLICY "CR updates registrations"
       (auth_user_role() = 'student' OR LOWER(auth.jwt()->>'email') IN (SELECT LOWER(email) FROM allowed_students))
       AND student_id = (SELECT student_id FROM allowed_students WHERE LOWER(email) = LOWER(auth.jwt()->>'email') LIMIT 1)
       AND COALESCE(student_edit_count, 0) < 3
+      AND COALESCE(advisor_completed, false) = false
     )
   )
   WITH CHECK (
@@ -90,6 +91,7 @@ CREATE POLICY "CR updates registrations"
       (auth_user_role() = 'student' OR LOWER(auth.jwt()->>'email') IN (SELECT LOWER(email) FROM allowed_students))
       AND student_id = (SELECT student_id FROM allowed_students WHERE LOWER(email) = LOWER(auth.jwt()->>'email') LIMIT 1)
       AND COALESCE(student_edit_count, 0) <= 3
+      AND COALESCE(advisor_completed, false) = false
     )
   );
 

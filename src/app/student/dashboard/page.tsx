@@ -194,6 +194,11 @@ export default function StudentDashboard() {
         if (!selectedSection) { toast.error('Please select a section.'); return }
         if (semester?.is_locked) { toast.error('This semester is locked. Updates are disabled.'); return }
         
+        if (registration && registration.advisor_completed) {
+            toast.error('Your registration has been completed by your advisor and cannot be modified.')
+            return
+        }
+
         if (registration && registration.student_edit_count >= 3) {
             toast.error('You have already reached the maximum edit limit of 3 changes.')
             return
@@ -320,8 +325,16 @@ export default function StudentDashboard() {
                             <CardDescription>Select your desired section and lab group below.</CardDescription>
                         </CardHeader>
                         <CardContent className="pt-6 space-y-6">
-                            {/* Warning alert when limit is reached */}
-                            {registration && registration.student_edit_count >= 3 ? (
+                            {/* Warning / Lock alerts */}
+                            {registration && registration.advisor_completed ? (
+                                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex gap-3 text-emerald-900 text-sm">
+                                    <CheckCircle2 className="h-5 w-5 flex-shrink-0 text-emerald-600 mt-0.5" />
+                                    <div>
+                                        <p className="font-bold text-emerald-950">Registration Completed &amp; Locked by Advisor</p>
+                                        <p className="mt-1 text-emerald-800">Your assigned advisor has verified and completed your section registration. Your section and lab choices are finalized and can no longer be modified.</p>
+                                    </div>
+                                </div>
+                            ) : registration && registration.student_edit_count >= 3 ? (
                                 <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex gap-3 text-red-800 text-sm">
                                     <ShieldAlert className="h-5 w-5 flex-shrink-0 text-red-600" />
                                     <div>
@@ -346,7 +359,7 @@ export default function StudentDashboard() {
                                         <Select 
                                             value={selectedSection} 
                                             onValueChange={handleSectionChange}
-                                            disabled={submitting || (registration && registration.student_edit_count >= 3) || semester?.is_locked}
+                                            disabled={submitting || (registration && (registration.student_edit_count >= 3 || registration.advisor_completed)) || semester?.is_locked}
                                         >
                                             <SelectTrigger className="h-11">
                                                 <SelectValue placeholder="Choose a section..." />
@@ -374,7 +387,7 @@ export default function StudentDashboard() {
                                         <Select 
                                             value={selectedLab} 
                                             onValueChange={setSelectedLab} 
-                                            disabled={!selectedSection || submitting || (registration && registration.student_edit_count >= 3) || semester?.is_locked}
+                                            disabled={!selectedSection || submitting || (registration && (registration.student_edit_count >= 3 || registration.advisor_completed)) || semester?.is_locked}
                                         >
                                             <SelectTrigger className="h-11">
                                                 <SelectValue placeholder="Choose lab group..." />
@@ -397,7 +410,7 @@ export default function StudentDashboard() {
                                             value={studentNote}
                                             onChange={e => setStudentNote(e.target.value)}
                                             rows={3}
-                                            disabled={submitting || (registration && registration.student_edit_count >= 3) || semester?.is_locked}
+                                            disabled={submitting || (registration && (registration.student_edit_count >= 3 || registration.advisor_completed)) || semester?.is_locked}
                                         />
                                     </div>
                                 </div>
@@ -413,7 +426,7 @@ export default function StudentDashboard() {
                                     <Button 
                                         type="submit" 
                                         className="w-full sm:w-auto h-11 px-6 text-sm font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg transition-all" 
-                                        disabled={submitting || !selectedSection || (registration && registration.student_edit_count >= 3) || semester?.is_locked}
+                                        disabled={submitting || !selectedSection || (registration && (registration.student_edit_count >= 3 || registration.advisor_completed)) || semester?.is_locked}
                                     >
                                         {submitting ? (
                                             <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Saving Choice...</>
