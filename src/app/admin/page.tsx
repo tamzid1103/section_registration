@@ -7,7 +7,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
-import { Users, ShieldAlert, Calendar, Settings, Bell, GraduationCap, Download, TrendingUp } from 'lucide-react'
+import { Users, ShieldAlert, Calendar, Settings, Bell, GraduationCap, Download, TrendingUp, BookOpen } from 'lucide-react'
 import Link from 'next/link'
 
 export default function AdminDashboard() {
@@ -162,6 +162,9 @@ export default function AdminDashboard() {
                         </Button>
                         <Button variant="outline" className="w-full justify-start gap-2" asChild>
                             <Link href="/admin/eligible-students"><Users className="h-4 w-4" /> Manage Eligible Students</Link>
+                        </Button>
+                        <Button variant="outline" className="w-full justify-start gap-2" asChild>
+                            <Link href="/admin/courses"><BookOpen className="h-4 w-4 text-blue-600" /> Manage Offered Courses</Link>
                         </Button>
                         <Button variant="outline" className="w-full justify-start gap-2" asChild>
                             <Link href="/admin/semesters"><Calendar className="h-4 w-4" /> Manage Semesters</Link>

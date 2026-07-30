@@ -68,6 +68,7 @@ export function PortalNavigation() {
         ],
         admin: [
             { href: '/admin', label: 'Dashboard' },
+            { href: '/admin/courses', label: 'Offered Courses' },
             { href: '/admin/users', label: 'Users' },
             { href: '/admin/advisors', label: 'Advisors' },
             { href: '/admin/eligible-students', label: 'Eligible Students' },

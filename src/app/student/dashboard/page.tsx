@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Users, BookOpen, Clock, LogOut, CheckCircle2, AlertTriangle, RefreshCw, GraduationCap, ShieldAlert } from 'lucide-react'
+import { Users, BookOpen, Clock, LogOut, CheckCircle2, AlertTriangle, RefreshCw, GraduationCap, ShieldAlert, Info } from 'lucide-react'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { invalidateCacheScopes } from '@/lib/cache/client'
@@ -403,10 +403,18 @@ export default function StudentDashboard() {
                                         </Select>
                                     </div>
 
-                                    <div className="sm:col-span-2 space-y-1.5">
-                                        <label className="text-sm font-semibold">Message for Advisor (Optional)</label>
+                                    <div className="sm:col-span-2 space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-sm font-semibold">Message for Advisor (Optional)</label>
+                                        </div>
+                                        <div className="bg-amber-50/90 border border-amber-200 rounded-lg p-3 text-xs text-amber-900 flex items-start gap-2.5">
+                                            <Info className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                                            <span>
+                                                <strong>Retake Course Notice:</strong> If you want to enroll in any extra retake course(s), please write the course code and course name in the box below so your advisor can verify and approve it.
+                                            </span>
+                                        </div>
                                         <Textarea
-                                            placeholder="Write any note about your request (e.g. section clash details)..."
+                                            placeholder="Write your retake course code & name (e.g. CSE115 - Programming Language I) or section clash notes here..."
                                             value={studentNote}
                                             onChange={e => setStudentNote(e.target.value)}
                                             rows={3}

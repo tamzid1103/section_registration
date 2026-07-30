@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription
 } from "@/components/ui/dialog";
-import { Users, Search, CheckCircle2, Circle, LogOut, Download, Printer, AlertTriangle, BookOpen, Mail, CalendarDays } from "lucide-react";
+import { Users, Search, CheckCircle2, Circle, LogOut, Download, Printer, AlertTriangle, BookOpen, Mail, CalendarDays, Layers } from "lucide-react";
 import { toast } from "sonner";
 import { getFriendlyErrorMessage } from "@/lib/utils";
 import { useRouter } from "next/navigation";
@@ -38,12 +38,22 @@ interface Semester {
     is_locked: boolean;
 }
 
+interface OfferedCourse {
+    id: string;
+    course_code: string;
+    course_name: string;
+    credit: number;
+}
+
 export default function AdvisorDashboard() {
     const [loading, setLoading] = useState(true);
     const [students, setStudents] = useState<Student[]>([]);
     const [advisorInfo, setAdvisorInfo] = useState<{ id: string; name: string; ranges: any[] } | null>(null);
     const [semesters, setSemesters] = useState<Semester[]>([]);
     const [selectedSemesterId, setSelectedSemesterId] = useState<string>("");
+    const [offeredCourses, setOfferedCourses] = useState<OfferedCourse[]>([]);
+    const [coursesModalOpen, setCoursesModalOpen] = useState(false);
+    const [courseSearchQuery, setCourseSearchQuery] = useState("");
     const [searchQuery, setSearchQuery] = useState("");
     const [sortBy, setSortBy] = useState("id");
     const [toggling, setToggling] = useState<string | null>(null);
@@ -103,9 +113,21 @@ export default function AdvisorDashboard() {
         }
     }
 
+    async function fetchOfferedCoursesForSemester(semesterId: string) {
+        const { data } = await supabase
+            .from("offered_courses")
+            .select("id, course_code, course_name, credit")
+            .eq("semester_id", semesterId)
+            .order("course_code", { ascending: true });
+
+        setOfferedCourses(data || []);
+    }
+
     async function fetchRegistrationsForSemester(advisorId: string, semesterId: string) {
         if (!advisorId || !semesterId) return;
         setLoading(true);
+
+        fetchOfferedCoursesForSemester(semesterId);
 
         const { data: regData } = await supabase
             .from("registrations")
@@ -442,6 +464,70 @@ export default function AdvisorDashboard() {
                                         <SelectItem value="pending">Pending First</SelectItem>
                                     </SelectContent>
                                 </Select>
+                                <Dialog open={coursesModalOpen} onOpenChange={setCoursesModalOpen}>
+                                    <DialogTrigger asChild>
+                                        <Button variant="outline" className="gap-2 border-blue-200 text-blue-700 hover:bg-blue-50 transition-colors bg-blue-50/30 font-semibold">
+                                            <Layers className="w-4 h-4 text-blue-600" /> Offered Courses ({offeredCourses.length})
+                                        </Button>
+                                    </DialogTrigger>
+                                    <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+                                        <DialogHeader>
+                                            <DialogTitle className="text-xl flex items-center gap-2 text-blue-700 font-bold">
+                                                <BookOpen className="w-5 h-5 text-blue-600" /> Offered Courses ({currentSemester?.name})
+                                            </DialogTitle>
+                                            <DialogDescription>
+                                                List of all courses offered for {currentSemester?.name}.
+                                            </DialogDescription>
+                                        </DialogHeader>
+
+                                        <div className="space-y-4 pt-2">
+                                            <div className="relative">
+                                                <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                                                <Input
+                                                    placeholder="Search by course code or title..."
+                                                    value={courseSearchQuery}
+                                                    onChange={(e) => setCourseSearchQuery(e.target.value)}
+                                                    className="pl-9 h-10"
+                                                />
+                                            </div>
+
+                                            {offeredCourses.length === 0 ? (
+                                                <div className="p-8 text-center border-2 border-dashed rounded-xl space-y-1">
+                                                    <BookOpen className="h-8 w-8 text-slate-400 mx-auto mb-2" />
+                                                    <p className="text-sm font-semibold text-slate-600">No offered courses listed for this semester.</p>
+                                                    <p className="text-xs text-slate-400">The administration has not added courses for {currentSemester?.name} yet.</p>
+                                                </div>
+                                            ) : (
+                                                <div className="border rounded-xl overflow-hidden">
+                                                    <Table>
+                                                        <TableHeader className="bg-slate-50">
+                                                            <TableRow>
+                                                                <TableHead className="w-[120px] font-bold">Code</TableHead>
+                                                                <TableHead className="font-bold">Course Title</TableHead>
+                                                                <TableHead className="w-[80px] font-bold text-center">Credit</TableHead>
+                                                            </TableRow>
+                                                        </TableHeader>
+                                                        <TableBody>
+                                                            {offeredCourses
+                                                                .filter(c =>
+                                                                    c.course_code.toLowerCase().includes(courseSearchQuery.toLowerCase()) ||
+                                                                    c.course_name.toLowerCase().includes(courseSearchQuery.toLowerCase())
+                                                                )
+                                                                .map((c) => (
+                                                                    <TableRow key={c.id} className="hover:bg-slate-50">
+                                                                        <TableCell className="font-mono font-bold text-blue-700">{c.course_code}</TableCell>
+                                                                        <TableCell className="font-medium text-slate-900">{c.course_name}</TableCell>
+                                                                        <TableCell className="text-center font-semibold text-slate-600">{c.credit}</TableCell>
+                                                                    </TableRow>
+                                                                ))}
+                                                        </TableBody>
+                                                    </Table>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </DialogContent>
+                                </Dialog>
+
                                 <Dialog>
                                     <DialogTrigger asChild>
                                         <Button variant="outline" className="gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50 hover:text-indigo-800 transition-colors bg-indigo-50/30">
