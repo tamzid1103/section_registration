@@ -434,6 +434,71 @@ export default function AdvisorDashboard() {
                 </div>
             )}
 
+            {/* Offered Courses Catalog - Always Visible */}
+            <Card className="print:hidden border-blue-200 bg-white shadow-sm overflow-hidden">
+                <CardHeader className="bg-gradient-to-r from-blue-50/80 to-indigo-50/50 border-b pb-3 pt-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                            <BookOpen className="w-5 h-5 text-blue-600 shrink-0" />
+                            <div>
+                                <CardTitle className="text-base font-bold text-slate-800 flex items-center gap-2">
+                                    Offered Courses Catalog
+                                    <Badge className="bg-blue-600 text-white font-bold px-2 py-0.5 text-xs">
+                                        {offeredCourses.length} Courses
+                                    </Badge>
+                                </CardTitle>
+                                <CardDescription className="text-xs text-slate-500">
+                                    Course codes &amp; titles offered for {currentSemester?.name || 'active semester'}.
+                                </CardDescription>
+                            </div>
+                        </div>
+
+                        <div className="relative w-full sm:w-64">
+                            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                            <Input
+                                placeholder="Search course code or title..."
+                                value={courseSearchQuery}
+                                onChange={(e) => setCourseSearchQuery(e.target.value)}
+                                className="pl-8 h-8 text-xs bg-white border-slate-200 focus-visible:ring-blue-500"
+                            />
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                    {offeredCourses.length === 0 ? (
+                        <div className="p-6 text-center text-slate-500 text-xs italic">
+                            No offered courses listed for this semester yet.
+                        </div>
+                    ) : (
+                        <div className="max-h-60 overflow-y-auto divide-y divide-slate-100">
+                            <Table>
+                                <TableHeader className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur-sm">
+                                    <TableRow className="text-xs">
+                                        <TableHead className="w-[120px] font-bold text-slate-700 py-2">Course Code</TableHead>
+                                        <TableHead className="font-bold text-slate-700 py-2">Course Title</TableHead>
+                                        <TableHead className="w-[80px] font-bold text-center text-slate-700 py-2">Credits</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {offeredCourses
+                                        .filter(c =>
+                                            c.course_code.toLowerCase().includes(courseSearchQuery.toLowerCase()) ||
+                                            c.course_name.toLowerCase().includes(courseSearchQuery.toLowerCase())
+                                        )
+                                        .map((c) => (
+                                            <TableRow key={c.id} className="hover:bg-blue-50/40 text-xs">
+                                                <TableCell className="font-mono font-bold text-blue-700 py-2">{c.course_code}</TableCell>
+                                                <TableCell className="font-medium text-slate-800 py-2">{c.course_name}</TableCell>
+                                                <TableCell className="text-center font-semibold text-slate-600 py-2">{c.credit}</TableCell>
+                                            </TableRow>
+                                        ))}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
             {/* Student Table */}
             <Card className="print:shadow-none print:border-none print:m-0 print:p-0">
                 <CardHeader className="print:hidden">
@@ -464,69 +529,6 @@ export default function AdvisorDashboard() {
                                         <SelectItem value="pending">Pending First</SelectItem>
                                     </SelectContent>
                                 </Select>
-                                <Dialog open={coursesModalOpen} onOpenChange={setCoursesModalOpen}>
-                                    <DialogTrigger asChild>
-                                        <Button variant="outline" className="gap-2 border-blue-200 text-blue-700 hover:bg-blue-50 transition-colors bg-blue-50/30 font-semibold">
-                                            <Layers className="w-4 h-4 text-blue-600" /> Offered Courses ({offeredCourses.length})
-                                        </Button>
-                                    </DialogTrigger>
-                                    <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-                                        <DialogHeader>
-                                            <DialogTitle className="text-xl flex items-center gap-2 text-blue-700 font-bold">
-                                                <BookOpen className="w-5 h-5 text-blue-600" /> Offered Courses ({currentSemester?.name})
-                                            </DialogTitle>
-                                            <DialogDescription>
-                                                List of all courses offered for {currentSemester?.name}.
-                                            </DialogDescription>
-                                        </DialogHeader>
-
-                                        <div className="space-y-4 pt-2">
-                                            <div className="relative">
-                                                <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                                                <Input
-                                                    placeholder="Search by course code or title..."
-                                                    value={courseSearchQuery}
-                                                    onChange={(e) => setCourseSearchQuery(e.target.value)}
-                                                    className="pl-9 h-10"
-                                                />
-                                            </div>
-
-                                            {offeredCourses.length === 0 ? (
-                                                <div className="p-8 text-center border-2 border-dashed rounded-xl space-y-1">
-                                                    <BookOpen className="h-8 w-8 text-slate-400 mx-auto mb-2" />
-                                                    <p className="text-sm font-semibold text-slate-600">No offered courses listed for this semester.</p>
-                                                    <p className="text-xs text-slate-400">The administration has not added courses for {currentSemester?.name} yet.</p>
-                                                </div>
-                                            ) : (
-                                                <div className="border rounded-xl overflow-hidden">
-                                                    <Table>
-                                                        <TableHeader className="bg-slate-50">
-                                                            <TableRow>
-                                                                <TableHead className="w-[120px] font-bold">Code</TableHead>
-                                                                <TableHead className="font-bold">Course Title</TableHead>
-                                                                <TableHead className="w-[80px] font-bold text-center">Credit</TableHead>
-                                                            </TableRow>
-                                                        </TableHeader>
-                                                        <TableBody>
-                                                            {offeredCourses
-                                                                .filter(c =>
-                                                                    c.course_code.toLowerCase().includes(courseSearchQuery.toLowerCase()) ||
-                                                                    c.course_name.toLowerCase().includes(courseSearchQuery.toLowerCase())
-                                                                )
-                                                                .map((c) => (
-                                                                    <TableRow key={c.id} className="hover:bg-slate-50">
-                                                                        <TableCell className="font-mono font-bold text-blue-700">{c.course_code}</TableCell>
-                                                                        <TableCell className="font-medium text-slate-900">{c.course_name}</TableCell>
-                                                                        <TableCell className="text-center font-semibold text-slate-600">{c.credit}</TableCell>
-                                                                    </TableRow>
-                                                                ))}
-                                                        </TableBody>
-                                                    </Table>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </DialogContent>
-                                </Dialog>
 
                                 <Dialog>
                                     <DialogTrigger asChild>
