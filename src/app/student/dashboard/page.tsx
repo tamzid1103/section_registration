@@ -266,7 +266,7 @@ export default function StudentDashboard() {
                         section_id: selectedSection,
                         lab_group_id: labVal,
                         advisor_id: advisorId,
-                        entered_by: user.id,
+                        entered_by: null,
                         note: studentNote.trim(),
                         student_edit_count: 0,
                         advisor_completed: false,
@@ -282,7 +282,7 @@ export default function StudentDashboard() {
                         section_id: selectedSection,
                         lab_group_id: labVal,
                         advisor_id: advisorId,
-                        entered_by: user.id,
+                        entered_by: null,
                         note: studentNote.trim(),
                         student_edit_count: 0
                     })
