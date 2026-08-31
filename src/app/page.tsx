@@ -308,8 +308,17 @@ export default function StudentHub() {
             }
 
             if (registerRole === "student") {
-                toast.success(json.message || "Activation link sent! Please verify your email before logging in.");
-                setAuthOpen(false);
+                toast.success(json.message || "Account created successfully! Logging you in...");
+                const { error: signInErr } = await supabase.auth.signInWithPassword({
+                    email: trimmedEmail,
+                    password: authPassword,
+                });
+                if (signInErr) {
+                    toast.success("Account created successfully! Please login now.");
+                    setAuthOpen(false);
+                    return;
+                }
+                router.push("/student/dashboard");
             } else if (registerRole === "advisor") {
                 const { error: signInErr } = await supabase.auth.signInWithPassword({
                     email: trimmedEmail,

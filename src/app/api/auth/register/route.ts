@@ -56,24 +56,23 @@ export async function POST(request: Request) {
         // we auto-create their allowed_students entry so the rest of the system works.
         // (isDomainAllowed is already confirmed above before this block)
 
-        const supabaseAnon = createClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-        )
-
-        const { error: signUpErr } = await supabaseAnon.auth.signUp({
+        const { error: signUpErr } = await supabaseAdmin.auth.admin.createUser({
             email: trimmedEmail,
             password,
-            options: {
-                emailRedirectTo: `${request.headers.get('origin')}/auth/callback`,
-                data: {
-                    full_name: fullName,
-                    student_id: studentId
-                }
+            email_confirm: true,
+            user_metadata: {
+                full_name: fullName,
+                student_id: studentId
             }
         })
 
         if (signUpErr) {
+            if (signUpErr.message.includes('already been registered') || signUpErr.message.includes('already exists')) {
+                return NextResponse.json(
+                    { error: 'An account with this email already exists. Please login instead.' }, 
+                    { status: 400 }
+                )
+            }
             return NextResponse.json({ error: signUpErr.message }, { status: 400 })
         }
 
@@ -90,7 +89,7 @@ export async function POST(request: Request) {
             { onConflict: 'email' }
         )
 
-        return NextResponse.json({ success: true, message: 'Account activation link has been sent to your email. Please verify your account.' })
+        return NextResponse.json({ success: true, message: 'Account created successfully! Logging you in...' })
     }
 
     // --- Step 1: Create auth user (email_confirm: true skips email verification) ---
