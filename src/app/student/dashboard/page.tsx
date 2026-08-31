@@ -435,7 +435,7 @@ export default function StudentDashboard() {
                                     </div>
 
                                     <div className="space-y-1.5">
-                                        <label className="text-sm font-semibold">Select Lab Group (Optional)</label>
+                                        <label className="text-sm font-semibold">Select Lab Group</label>
                                         <Select 
                                             value={selectedLab} 
                                             onValueChange={setSelectedLab} 
