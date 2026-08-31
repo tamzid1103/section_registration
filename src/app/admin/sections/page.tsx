@@ -81,6 +81,9 @@ export default function AdminSections() {
     async function deleteSection(sectionId: string, sectionName: string) {
         if (!confirm(`Delete section "${sectionName}" and all its data? This cannot be undone.`)) return
 
+        // Remove registrations in this section first to prevent FK constraint errors
+        await supabase.from('registrations').delete().eq('section_id', sectionId)
+
         const { error } = await supabase.from('sections').delete().eq('id', sectionId)
         if (error) { toast.error(getFriendlyErrorMessage(error.message)) }
         else {

@@ -260,17 +260,46 @@ export default function StudentDashboard() {
                     await refreshData()
                 }
             } else {
-                // First time register
-                const { error } = await supabase.from('registrations').insert({
-                    student_name: allowedInfo.name,
-                    student_id: allowedInfo.student_id,
-                    section_id: selectedSection,
-                    lab_group_id: labVal,
-                    advisor_id: advisorId,
-                    entered_by: user.id,
-                    note: studentNote.trim(),
-                    student_edit_count: 0
-                })
+                // No registration for the current semester — but there may be an old one from a previous semester.
+                // Since registrations.student_id is UNIQUE globally, we must UPDATE the existing row
+                // rather than INSERT a new one.
+                const { data: anyExisting } = await supabase
+                    .from('registrations')
+                    .select('id')
+                    .eq('student_id', allowedInfo.student_id)
+                    .maybeSingle()
+
+                let error: any = null
+
+                if (anyExisting) {
+                    // Old semester record found — reuse it for the new semester (reset flags)
+                    const { error: updateErr } = await supabase.from('registrations').update({
+                        student_name: allowedInfo.name,
+                        section_id: selectedSection,
+                        lab_group_id: labVal,
+                        advisor_id: advisorId,
+                        entered_by: user.id,
+                        note: studentNote.trim(),
+                        student_edit_count: 0,
+                        advisor_completed: false,
+                        advisor_note: null,
+                        timestamp: new Date().toISOString(),
+                    }).eq('id', anyExisting.id)
+                    error = updateErr
+                } else {
+                    // Truly first-time registration
+                    const { error: insertErr } = await supabase.from('registrations').insert({
+                        student_name: allowedInfo.name,
+                        student_id: allowedInfo.student_id,
+                        section_id: selectedSection,
+                        lab_group_id: labVal,
+                        advisor_id: advisorId,
+                        entered_by: user.id,
+                        note: studentNote.trim(),
+                        student_edit_count: 0
+                    })
+                    error = insertErr
+                }
 
                 if (error) {
                     toast.error(getFriendlyErrorMessage(error.message))

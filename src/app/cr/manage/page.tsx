@@ -102,9 +102,12 @@ export default function CRManagePage() {
     }
 
     async function fetchRegistrations() {
+        const { data: sem } = await supabase.from('semesters').select('*').eq('is_active', true).maybeSingle()
+        if (!sem) return
         const { data } = await supabase
             .from('registrations')
-            .select('*, sections(name, semester_id), lab_groups(name), advisors(name), authorized_staff(name, email)')
+            .select('*, sections!inner(name, semester_id), lab_groups(name), advisors(name), authorized_staff(name, email)')
+            .eq('sections.semester_id', sem.id)
             .order('timestamp', { ascending: false })
         if (data) setRegistrations(data)
     }
@@ -138,23 +141,44 @@ export default function CRManagePage() {
             advisorId = match?.advisor_id || null
         }
 
-        const { error } = await supabase.from('registrations').insert({
-            student_name: fName.trim(),
-            student_id: fId.trim(),
-            section_id: fSection,
-            lab_group_id: fLab || null,
-            advisor_id: advisorId,
-            entered_by: crInfo.id,
-            note: fNote.trim(),
-        })
+        const { data: existing } = await supabase
+            .from('registrations')
+            .select('id')
+            .eq('student_id', fId.trim())
+            .maybeSingle()
+
+        let error: any = null
+        if (existing) {
+            const { error: updateErr } = await supabase.from('registrations').update({
+                student_name: fName.trim(),
+                section_id: fSection,
+                lab_group_id: fLab || null,
+                advisor_id: advisorId,
+                entered_by: crInfo.id,
+                note: fNote.trim(),
+                student_edit_count: 0,
+                advisor_completed: false,
+                advisor_note: null,
+                timestamp: new Date().toISOString()
+            }).eq('id', existing.id)
+            error = updateErr
+        } else {
+            const { error: insertErr } = await supabase.from('registrations').insert({
+                student_name: fName.trim(),
+                student_id: fId.trim(),
+                section_id: fSection,
+                lab_group_id: fLab || null,
+                advisor_id: advisorId,
+                entered_by: crInfo.id,
+                note: fNote.trim(),
+                student_edit_count: 0
+            })
+            error = insertErr
+        }
 
         if (error) {
             const errorMessage = getLockedMessage(error.message)
-            if (errorMessage.toLowerCase().includes('duplicate') || errorMessage.toLowerCase().includes('unique')) {
-                toast.error(`Student ID ${fId} is already registered.`)
-            } else {
-                toast.error(getFriendlyErrorMessage(errorMessage))
-            }
+            toast.error(getFriendlyErrorMessage(errorMessage))
             return
         }
 
@@ -307,12 +331,41 @@ export default function CRManagePage() {
                 const numId = parseInt(studentId.replace(/-/g, ''))
                 const match = (ranges || []).find(r => numId >= Number(r.start_id_numeric) && numId <= Number(r.end_id_numeric))
 
-                const { error } = await supabase.from('registrations').insert({
-                    student_id: studentId, student_name: studentName,
-                    section_id: sec.id, lab_group_id: lg?.id || null,
-                    advisor_id: match?.advisor_id || null,
-                    entered_by: crInfo.id, note: note || ''
-                })
+                const { data: existing } = await supabase
+                    .from('registrations')
+                    .select('id')
+                    .eq('student_id', studentId)
+                    .maybeSingle()
+
+                let error: any = null
+                if (existing) {
+                    const { error: updateErr } = await supabase.from('registrations').update({
+                        student_name: studentName,
+                        section_id: sec.id,
+                        lab_group_id: lg?.id || null,
+                        advisor_id: match?.advisor_id || null,
+                        entered_by: crInfo.id,
+                        note: note || '',
+                        student_edit_count: 0,
+                        advisor_completed: false,
+                        advisor_note: null,
+                        timestamp: new Date().toISOString()
+                    }).eq('id', existing.id)
+                    error = updateErr
+                } else {
+                    const { error: insertErr } = await supabase.from('registrations').insert({
+                        student_id: studentId,
+                        student_name: studentName,
+                        section_id: sec.id,
+                        lab_group_id: lg?.id || null,
+                        advisor_id: match?.advisor_id || null,
+                        entered_by: crInfo.id,
+                        note: note || '',
+                        student_edit_count: 0
+                    })
+                    error = insertErr
+                }
+
                 if (error) {
                     const message = error.message || ''
                     if (message.toLowerCase().includes('semester_locked')) {
