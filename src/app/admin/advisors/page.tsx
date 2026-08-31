@@ -84,12 +84,21 @@ export default function AdminAdvisorsPage() {
 
     async function handleDeleteAdvisor(id: string) {
         if (!confirm('Remove this advisor? Their student ID ranges will also be deleted.')) return
+
+        // 1. Null out advisor_id on any registrations that reference this advisor
+        //    (keeps the student registrations intact, just unlinks the advisor)
+        await supabase.from('registrations').update({ advisor_id: null }).eq('advisor_id', id)
+
+        // 2. Delete their ID ranges
+        await supabase.from('student_advisor_ranges').delete().eq('advisor_id', id)
+
+        // 3. Now safe to delete the advisor record
         const { error } = await supabase.from('advisors').delete().eq('id', id)
         if (error) {
             toast.error(getFriendlyErrorMessage(error.message))
         } else {
-            toast.success('Advisor removed.')
-            // Also remove from authorized_staff
+            toast.success('Advisor removed successfully.')
+            // Also remove from authorized_staff so they lose portal access
             const adv = advisors.find(a => a.id === id)
             if (adv) await supabase.from('authorized_staff').delete().eq('email', adv.email)
             fetchAll()
