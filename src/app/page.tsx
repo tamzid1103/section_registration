@@ -50,7 +50,7 @@ export default function StudentHub() {
 
     const [authOpen, setAuthOpen] = useState(false);
     const [authMode, setAuthMode] = useState<Mode>("login");
-    const [registerRole, setRegisterRole] = useState<RegisterRole>("cr");
+    const [registerRole, setRegisterRole] = useState<RegisterRole>("student");
     const [authLoading, setAuthLoading] = useState(false);
     const [authError, setAuthError] = useState<string | null>(null);
     const [authEmail, setAuthEmail] = useState("");
@@ -719,17 +719,6 @@ export default function StudentHub() {
                                         <div className="grid grid-cols-3 gap-2">
                                             <button
                                                 type="button"
-                                                onClick={() => setRegisterRole("student")}
-                                                className={`flex flex-col items-center gap-1 p-2 rounded-xl border-2 text-xs font-semibold transition-all ${registerRole === "student"
-                                                    ? "border-blue-600 bg-blue-50 text-blue-700 shadow-sm"
-                                                    : "border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50"
-                                                    }`}
-                                            >
-                                                <GraduationCap className="w-4 h-4" />
-                                                Student
-                                            </button>
-                                            <button
-                                                type="button"
                                                 onClick={() => setRegisterRole("cr")}
                                                 className={`flex flex-col items-center gap-1 p-2 rounded-xl border-2 text-xs font-semibold transition-all ${registerRole === "cr"
                                                     ? "border-blue-600 bg-blue-50 text-blue-700 shadow-sm"
@@ -738,6 +727,17 @@ export default function StudentHub() {
                                             >
                                                 <Shield className="w-4 h-4" />
                                                 CR Apply
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setRegisterRole("student")}
+                                                className={`flex flex-col items-center gap-1 p-2 rounded-xl border-2 text-xs font-semibold transition-all ${registerRole === "student"
+                                                    ? "border-blue-600 bg-blue-50 text-blue-700 shadow-sm"
+                                                    : "border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50"
+                                                    }`}
+                                            >
+                                                <GraduationCap className="w-4 h-4" />
+                                                Student
                                             </button>
                                             <button
                                                 type="button"

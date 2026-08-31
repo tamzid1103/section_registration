@@ -103,8 +103,9 @@ export default function StudentDashboard() {
             const [regRes, secRes] = await Promise.all([
                 supabase
                     .from('registrations')
-                    .select('*, sections(name), lab_groups(name), advisors(name, email, designation)')
-                    .eq('student_id', allowed.student_id)
+                    .select('*, sections!inner(name, semester_id), lab_groups(name), advisors(name, email, designation)')
+                    .eq('student_id', resolvedAllowed.student_id)
+                    .eq('sections.semester_id', sem.id)
                     .maybeSingle(),
                 supabase
                     .from('sections')
@@ -149,8 +150,9 @@ export default function StudentDashboard() {
         const [regRes, secRes] = await Promise.all([
             supabase
                 .from('registrations')
-                .select('*, sections(name), lab_groups(name), advisors(name, email, designation)')
+                .select('*, sections!inner(name, semester_id), lab_groups(name), advisors(name, email, designation)')
                 .eq('student_id', studentId)
+                .eq('sections.semester_id', semester.id)
                 .maybeSingle(),
             supabase
                 .from('sections')
