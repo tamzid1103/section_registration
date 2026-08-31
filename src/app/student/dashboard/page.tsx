@@ -256,8 +256,8 @@ export default function StudentDashboard() {
                     })
 
                     toast.success('Section choices updated successfully!')
-                    await invalidateCacheScopes(['home', 'admin'])
                     await refreshData()
+                    await invalidateCacheScopes(['home', 'admin'])
                 }
             } else {
                 // No registration for the current semester — but there may be an old one from a previous semester.
@@ -314,8 +314,8 @@ export default function StudentDashboard() {
                     })
 
                     toast.success('Registration successful!')
-                    await invalidateCacheScopes(['home', 'admin'])
                     await refreshData()
+                    await invalidateCacheScopes(['home', 'admin'])
                 }
             }
         } catch (err: any) {
