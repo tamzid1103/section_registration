@@ -3,15 +3,14 @@ import { createClient } from '@supabase/supabase-js'
 import { withRedisCache } from '@/lib/cache/redis'
 import { cacheKeys } from '@/lib/cache/keys'
 
-const HOME_CACHE_TTL_SECONDS = 60
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
+// Set low cache TTL (2 seconds) so home page section counts update live
+const HOME_CACHE_TTL_SECONDS = 2
 
 async function loadHomeData() {
-    const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        { auth: { autoRefreshToken: false, persistSession: false } }
-    )
-    // system_settings may have restrictive RLS — use service role key to guarantee read
+    // Use service role key for all home data queries to guarantee bypass of RLS restrictions
     const adminSupabase = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -19,13 +18,13 @@ async function loadHomeData() {
     )
 
     const [sectionsResponse, registrationsResponse, advisorsResponse, settingsResponse] = await Promise.all([
-        supabase
+        adminSupabase
             .from('sections')
             .select('id, name, capacity, semester_id, semesters!inner(name, is_active)')
             .eq('semesters.is_active', true)
             .order('name'),
-        supabase.from('registrations').select('section_id'),
-        supabase
+        adminSupabase.from('registrations').select('section_id'),
+        adminSupabase
             .from('advisors')
             .select('id, name, email, phone, designation, student_advisor_ranges(start_id, end_id)')
             .order('name'),
@@ -56,8 +55,15 @@ async function loadHomeData() {
 export async function GET() {
     const cached = await withRedisCache(cacheKeys.home, HOME_CACHE_TTL_SECONDS, loadHomeData)
 
-    return NextResponse.json({
-        data: cached.value,
-        cache: cached.cacheStatus,
-    })
+    return NextResponse.json(
+        {
+            data: cached.value,
+            cache: cached.cacheStatus,
+        },
+        {
+            headers: {
+                'Cache-Control': 'no-store, max-age=0, must-revalidate',
+            },
+        }
+    )
 }

@@ -18,6 +18,7 @@ import {
 import { Users, Search, CheckCircle2, Circle, LogOut, Download, Printer, AlertTriangle, BookOpen, Mail, CalendarDays, Layers } from "lucide-react";
 import { toast } from "sonner";
 import { getFriendlyErrorMessage } from "@/lib/utils";
+import { parseStudentIdNumeric } from "@/lib/advisor-assignment";
 import { useRouter } from "next/navigation";
 
 interface Student {
@@ -129,6 +130,7 @@ export default function AdvisorDashboard() {
 
         fetchOfferedCoursesForSemester(semesterId);
 
+        // 1. Fetch explicitly assigned registrations for this semester
         const { data: regData } = await supabase
             .from("registrations")
             .select(`
@@ -145,22 +147,61 @@ export default function AdvisorDashboard() {
             .eq("sections.semester_id", semesterId)
             .order("student_id", { ascending: true });
 
-        if (regData) {
-            setStudents(
-                regData.map((r: any) => ({
-                    id: r.id,
-                    student_id: r.student_id,
-                    student_name: r.student_name,
-                    section_name: r.sections?.name || "N/A",
-                    lab_group_name: r.lab_groups?.name || "—",
-                    advisor_completed: r.advisor_completed,
-                    advisor_note: r.advisor_note || "",
-                    created_at: new Date(r.timestamp).toLocaleDateString(),
-                }))
-            );
-        } else {
-            setStudents([]);
+        // 2. Fallback: fetch registrations with null advisor_id in active semester that fall in advisor's ranges
+        const { data: unassignedRegs } = await supabase
+            .from("registrations")
+            .select(`
+                id, 
+                student_id, 
+                student_name, 
+                advisor_completed, 
+                advisor_note, 
+                timestamp, 
+                sections!inner(name, semester_id), 
+                lab_groups(name)
+            `)
+            .is("advisor_id", null)
+            .eq("sections.semester_id", semesterId);
+
+        const assignedIds = new Set((regData || []).map((r: any) => r.id));
+        const extraMatched: any[] = [];
+
+        if (unassignedRegs && advisorInfo?.ranges && advisorInfo.ranges.length > 0) {
+            for (const unreg of unassignedRegs) {
+                if (assignedIds.has(unreg.id)) continue;
+                const numId = parseStudentIdNumeric(unreg.student_id);
+                if (numId === null) continue;
+
+                const match = advisorInfo.ranges.find((r: any) => {
+                    const start = parseStudentIdNumeric(r.start_id);
+                    const end = parseStudentIdNumeric(r.end_id);
+                    if (start === null || end === null) return false;
+                    return numId >= start && numId <= end;
+                });
+
+                if (match) {
+                    extraMatched.push(unreg);
+                    // Silently backfill advisor_id so future queries find it immediately
+                    await supabase.from("registrations").update({ advisor_id: advisorId }).eq("id", unreg.id);
+                }
+            }
         }
+
+        const combined = [...(regData || []), ...extraMatched];
+        combined.sort((a, b) => (a.student_id || "").localeCompare(b.student_id || ""));
+
+        setStudents(
+            combined.map((r: any) => ({
+                id: r.id,
+                student_id: r.student_id,
+                student_name: r.student_name,
+                section_name: r.sections?.name || "N/A",
+                lab_group_name: r.lab_groups?.name || "—",
+                advisor_completed: r.advisor_completed,
+                advisor_note: r.advisor_note || "",
+                created_at: new Date(r.timestamp).toLocaleDateString(),
+            }))
+        );
         setLoading(false);
     }
 

@@ -12,6 +12,7 @@ import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { invalidateCacheScopes } from '@/lib/cache/client'
 import { getFriendlyErrorMessage } from '@/lib/utils'
+import { findAdvisorForStudent } from '@/lib/advisor-assignment'
 
 export default function StudentDashboard() {
     const supabase = createClient()
@@ -199,19 +200,6 @@ export default function StudentDashboard() {
         setLabGroups(data || [])
     }
 
-    // Auto-lookup advisor range (global across semesters)
-    async function getAdvisorId(studentId: string) {
-        const numId = parseInt(studentId.replace(/-/g, ''))
-        let advisorId: string | null = null
-        const { data: ranges } = await supabase.from('student_advisor_ranges')
-            .select('advisor_id, start_id_numeric, end_id_numeric')
-        if (ranges) {
-            const match = ranges.find(r => numId >= Number(r.start_id_numeric) && numId <= Number(r.end_id_numeric))
-            advisorId = match?.advisor_id || null
-        }
-        return advisorId
-    }
-
     async function handleRegisterOrEditSubmit(e: React.FormEvent) {
         e.preventDefault()
         if (!selectedSection) { toast.error('Please select a section.'); return }
@@ -229,7 +217,7 @@ export default function StudentDashboard() {
 
         setSubmitting(true)
         try {
-            const advisorId = await getAdvisorId(allowedInfo.student_id)
+            const advisorId = await findAdvisorForStudent(allowedInfo.student_id, semester?.id)
             const labVal = selectedLab === 'none' ? null : (selectedLab || null)
 
             if (registration) {
