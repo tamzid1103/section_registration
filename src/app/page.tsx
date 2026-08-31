@@ -145,6 +145,13 @@ export default function StudentHub() {
                 return;
             }
 
+            // Open-domain: any edu-domain email can be a student even if not pre-listed
+            const emailDomain = userEmail.split('@')[1] || ''
+            if (emailDomain === 'diu.edu.bd' || emailDomain === 'daffodilvarsity.edu.bd') {
+                router.push("/student/dashboard");
+                return;
+            }
+
             const { data: advisorRec } = await supabase
                 .from("advisors")
                 .select("id, name")
@@ -183,6 +190,7 @@ export default function StudentHub() {
         let loginEmail = inputVal.toLowerCase();
 
         if (!loginEmail.includes("@")) {
+            // Try allowed_students first
             const { data: allowedRec } = await supabase
                 .from("allowed_students")
                 .select("email")
@@ -192,9 +200,21 @@ export default function StudentHub() {
             if (allowedRec?.email) {
                 loginEmail = allowedRec.email;
             } else {
-                setAuthError("No eligible student found with this Student ID.");
-                setAuthLoading(false);
-                return;
+                // Also try authorized_staff (open-domain students registered without pre-auth)
+                const { data: staffRec } = await supabase
+                    .from("authorized_staff")
+                    .select("email")
+                    .eq("name", inputVal)
+                    .eq("role", "student")
+                    .maybeSingle();
+
+                if (staffRec?.email) {
+                    loginEmail = staffRec.email;
+                } else {
+                    setAuthError("No student found with this Student ID. Please log in using your email directly.");
+                    setAuthLoading(false);
+                    return;
+                }
             }
         }
 

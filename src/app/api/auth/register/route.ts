@@ -39,27 +39,29 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Student ID is required for student registration.' }, { status: 400 })
         }
 
-        // Verify if email and student ID match in allowed_students
-        const { data: allowedRec, error: allowedErr } = await supabaseAdmin
+        // Check if student is pre-authorized (allowed_students list)
+        const { data: allowedRec } = await supabaseAdmin
             .from('allowed_students')
             .select('student_id, name')
             .eq('email', trimmedEmail)
             .maybeSingle()
 
-        if (allowedErr || !allowedRec) {
-            return NextResponse.json({ error: 'Your email is not authorized for student registration. Contact admin.' }, { status: 403 })
+        // If pre-authorized, validate the student ID matches
+        if (allowedRec) {
+            if (allowedRec.student_id.trim() !== studentId.trim()) {
+                return NextResponse.json({ error: 'Provided Student ID does not match the pre-authorized record.' }, { status: 400 })
+            }
         }
-
-        if (allowedRec.student_id.trim() !== studentId.trim()) {
-            return NextResponse.json({ error: 'Provided Student ID does not match the pre-authorized record.' }, { status: 400 })
-        }
+        // Otherwise, any @diu.edu.bd or @daffodilvarsity.edu.bd email is welcome —
+        // we auto-create their allowed_students entry so the rest of the system works.
+        // (isDomainAllowed is already confirmed above before this block)
 
         const supabaseAnon = createClient(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
             process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
         )
 
-        const { data: signUpData, error: signUpErr } = await supabaseAnon.auth.signUp({
+        const { error: signUpErr } = await supabaseAnon.auth.signUp({
             email: trimmedEmail,
             password,
             options: {
@@ -73,6 +75,14 @@ export async function POST(request: Request) {
 
         if (signUpErr) {
             return NextResponse.json({ error: signUpErr.message }, { status: 400 })
+        }
+
+        // Auto-insert into allowed_students if not already there
+        if (!allowedRec) {
+            await supabaseAdmin.from('allowed_students').upsert(
+                { email: trimmedEmail, student_id: studentId.trim(), name: fullName },
+                { onConflict: 'email' }
+            )
         }
 
         await supabaseAdmin.from('authorized_staff').upsert(

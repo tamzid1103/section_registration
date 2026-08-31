@@ -6,7 +6,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
-import { Check, X, ShieldCheck, Mail, ArrowUpRight } from 'lucide-react'
+import { Check, X, ShieldCheck, Mail, ArrowUpRight, Trash2, UserMinus } from 'lucide-react'
 import { toast } from 'sonner'
 import { getFriendlyErrorMessage } from '@/lib/utils'
 
@@ -76,6 +76,38 @@ export default function AdminUsers() {
         }
 
         toast.success('Promoted to Admin')
+        fetchData()
+    }
+
+    async function handleDemoteCR(staffId: string, staffEmail: string) {
+        if (!confirm(`Demote ${staffEmail} from CR to a regular student? They will lose CR portal access.`)) return
+        const { error } = await supabase
+            .from('authorized_staff')
+            .update({ role: 'student' })
+            .eq('id', staffId)
+
+        if (error) { toast.error(getFriendlyErrorMessage(error.message)); return }
+
+        // Also reject their approved CR application so they can reapply if needed
+        await supabase.from('cr_applications').update({ status: 'rejected' }).eq('email', staffEmail).eq('status', 'approved')
+
+        toast.success(`${staffEmail} demoted to Student role.`)
+        fetchData()
+    }
+
+    async function handleRemoveCR(staffId: string, staffEmail: string) {
+        if (!confirm(`Remove ${staffEmail} from authorized staff entirely? They will not be able to access any portal.`)) return
+        const { error } = await supabase
+            .from('authorized_staff')
+            .delete()
+            .eq('id', staffId)
+
+        if (error) { toast.error(getFriendlyErrorMessage(error.message)); return }
+
+        // Reject their CR application too
+        await supabase.from('cr_applications').update({ status: 'rejected' }).eq('email', staffEmail).eq('status', 'approved')
+
+        toast.success(`${staffEmail} removed from authorized staff.`)
         fetchData()
     }
 
@@ -165,9 +197,17 @@ export default function AdminUsers() {
                                         </TableCell>
                                         <TableCell className="text-right">
                                             {s.role === 'cr' ? (
-                                                <Button size="sm" variant="outline" onClick={() => handlePromoteToAdmin(s.id)}>
-                                                    <ArrowUpRight className="h-4 w-4 mr-1" /> Promote
-                                                </Button>
+                                                <div className="flex gap-1.5 justify-end">
+                                                    <Button size="sm" variant="outline" onClick={() => handlePromoteToAdmin(s.id)} className="text-blue-700 border-blue-200 hover:bg-blue-50">
+                                                        <ArrowUpRight className="h-3.5 w-3.5 mr-1" /> Promote
+                                                    </Button>
+                                                    <Button size="sm" variant="outline" onClick={() => handleDemoteCR(s.id, s.email)} className="text-amber-700 border-amber-200 hover:bg-amber-50">
+                                                        <UserMinus className="h-3.5 w-3.5 mr-1" /> Demote
+                                                    </Button>
+                                                    <Button size="sm" variant="outline" onClick={() => handleRemoveCR(s.id, s.email)} className="text-red-700 border-red-200 hover:bg-red-50">
+                                                        <Trash2 className="h-3.5 w-3.5 mr-1" /> Remove
+                                                    </Button>
+                                                </div>
                                             ) : (
                                                 <span className="text-xs text-muted-foreground">No actions</span>
                                             )}

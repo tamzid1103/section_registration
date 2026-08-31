@@ -56,18 +56,39 @@ export default function StudentDashboard() {
         setUser(currentUser)
 
         // Fetch pre-authorized student info
-        const { data: allowed, error: allowedErr } = await supabase
+        const { data: allowed } = await supabase
             .from('allowed_students')
             .select('*')
             .eq('email', currentUser.email)
             .maybeSingle()
 
-        if (allowedErr || !allowed) {
-            toast.error('You are not pre-authorized as a student.')
-            router.push('/')
-            return
+        // Open-domain fallback: if not in allowed_students but has a valid edu email,
+        // build a minimal allowedInfo from auth user metadata so they can still register.
+        let resolvedAllowed = allowed
+        if (!resolvedAllowed) {
+            const domain = (currentUser.email || '').split('@')[1] || ''
+            const isEduDomain = domain === 'diu.edu.bd' || domain === 'daffodilvarsity.edu.bd'
+            if (!isEduDomain) {
+                toast.error('You are not authorized to access the student portal.')
+                router.push('/')
+                return
+            }
+            // Use metadata or authorized_staff for name/student_id
+            const { data: staffRec } = await supabase
+                .from('authorized_staff')
+                .select('name')
+                .eq('email', currentUser.email)
+                .maybeSingle()
+            const metaStudentId = currentUser.user_metadata?.student_id || ''
+            const metaName = staffRec?.name || currentUser.user_metadata?.full_name || currentUser.email
+            resolvedAllowed = {
+                id: null,
+                email: currentUser.email,
+                student_id: metaStudentId,
+                name: metaName,
+            }
         }
-        setAllowedInfo(allowed)
+        setAllowedInfo(resolvedAllowed)
 
         // Fetch Active Semester
         const { data: sem } = await supabase
