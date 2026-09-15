@@ -45,7 +45,7 @@ async function loadAdminSummary(targetSemesterId?: string | null) {
         adminSupabase.from('semesters').select('id, name, is_active, is_locked, created_at').order('created_at', { ascending: false }),
         adminSupabase.from('authorized_staff').select('id', { count: 'exact', head: true }).eq('role', 'cr'),
         adminSupabase.from('cr_applications').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
-        adminSupabase.from('audit_logs').select('*').order('timestamp', { ascending: false }).limit(10),
+        adminSupabase.from('audit_logs').select('*').order('timestamp', { ascending: false }).limit(150),
         adminSupabase.from('advisors').select('id, name').order('name'),
     ])
 

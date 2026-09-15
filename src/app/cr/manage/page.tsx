@@ -118,7 +118,7 @@ export default function CRManagePage() {
 
     async function fetchAuditLogs() {
         const { data } = await supabase
-            .from('audit_logs').select('*').order('timestamp', { ascending: false }).limit(30)
+            .from('audit_logs').select('*').order('timestamp', { ascending: false }).limit(150)
         if (data) setAuditLogs(data)
     }
 
@@ -197,11 +197,17 @@ export default function CRManagePage() {
             return
         }
 
-        // Audit log
+        const secName = sections.find(s => s.id === fSection)?.name || 'Unknown'
+        const labName = labGroups.find(l => l.id === fLab)?.name
+        const labText = labName ? `, Lab: ${labName}` : ' (No Lab)'
+        const noteText = fNote.trim() ? ` | Note: "${fNote.trim()}"` : ''
+
+        // Audit log with CR name and full details
         await supabase.from('audit_logs').insert({
             user_id: (await supabase.auth.getUser()).data.user?.id,
-            role: crInfo.role, action: 'ADD',
-            note: `Added ${fName} (${fId}) to section ${sections.find(s => s.id === fSection)?.name}`
+            role: crInfo?.role || 'cr', 
+            action: 'ADD',
+            note: `CR ${crInfo?.name || 'Unknown'} (${crInfo?.email || ''}) registered student ${fName.trim()} (${fId.trim()}) to Section ${secName}${labText}${noteText}`
         })
 
         toast.success('Student registered!')
@@ -219,10 +225,14 @@ export default function CRManagePage() {
         const { error } = await supabase.from('registrations').delete().eq('id', reg.id)
         if (error) { toast.error(getFriendlyErrorMessage(getLockedMessage(error.message))); return }
 
+        const secName = reg.sections?.name || 'Unknown'
+        const labText = reg.lab_groups?.name ? `, Lab: ${reg.lab_groups.name}` : ''
+
         await supabase.from('audit_logs').insert({
             user_id: (await supabase.auth.getUser()).data.user?.id,
-            role: crInfo?.role || 'cr', action: 'DELETE',
-            note: `Deleted ${reg.student_name} (${reg.student_id}) from section ${reg.sections?.name}`
+            role: crInfo?.role || 'cr', 
+            action: 'DELETE',
+            note: `CR ${crInfo?.name || 'Unknown'} (${crInfo?.email || ''}) deleted student ${reg.student_name} (${reg.student_id}) from Section ${secName}${labText}`
         })
         toast.success('Student entry deleted.')
         await invalidateCacheScopes(['home', 'admin'])
@@ -272,10 +282,17 @@ export default function CRManagePage() {
 
         if (error) { toast.error(getFriendlyErrorMessage(getLockedMessage(error.message))); return }
 
+        const oldSecName = editReg.sections?.name || 'Unknown'
+        const newSecName = sections.find(s => s.id === editSection)?.name || oldSecName
+        const oldLabName = editReg.lab_groups?.name || 'None'
+        const newLabName = editLabGroups.find(l => l.id === labVal)?.name || (labVal ? 'None' : 'None')
+        const noteText = editNote.trim() ? ` | Note: "${editNote.trim()}"` : ''
+
         await supabase.from('audit_logs').insert({
             user_id: (await supabase.auth.getUser()).data.user?.id,
-            role: crInfo?.role || 'cr', action: 'EDIT',
-            note: `Edited ${editReg.student_name} (${editReg.student_id}) — moved to section ${sections.find(s => s.id === editSection)?.name}`
+            role: crInfo?.role || 'cr', 
+            action: 'EDIT',
+            note: `CR ${crInfo?.name || 'Unknown'} (${crInfo?.email || ''}) updated ${editReg.student_name} (${editReg.student_id}) — Section: ${oldSecName} → ${newSecName}, Lab: ${oldLabName} → ${newLabName}${noteText}`
         })
 
         toast.success('Student updated.')
@@ -409,6 +426,16 @@ export default function CRManagePage() {
                 setUploadCurrent(i + 1)
                 setUploadProgress(Math.round(((i + 1) / rows.length) * 100))
             }
+
+            if (success > 0) {
+                await supabase.from('audit_logs').insert({
+                    user_id: (await supabase.auth.getUser()).data.user?.id,
+                    role: crInfo?.role || 'cr',
+                    action: 'ADD',
+                    note: `CR ${crInfo?.name || 'Unknown'} (${crInfo?.email || ''}) bulk-imported ${success} student registration${success > 1 ? 's' : ''} via CSV`
+                })
+            }
+
             toast.success(`Import done: ${success} added, ${fail} failed.`)
         } catch (err: any) {
             toast.error(`Error importing CSV: ${err.message}`)
@@ -417,6 +444,7 @@ export default function CRManagePage() {
             if (csvRef.current) csvRef.current.value = ''
             await invalidateCacheScopes(['home', 'admin'])
             fetchRegistrations()
+            fetchAuditLogs()
         }
     }
 
@@ -848,37 +876,49 @@ export default function CRManagePage() {
                 {/* ── HISTORY TAB ──────────────────────────────────────────── */}
                 <TabsContent value="history">
                     <Card>
-                        <CardHeader><CardTitle>Audit Trail (Last 30 Actions)</CardTitle></CardHeader>
+                        <CardHeader>
+                            <CardTitle>Activity History (Last {auditLogs.length} Actions)</CardTitle>
+                        </CardHeader>
                         <CardContent>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Action</TableHead>
-                                        <TableHead>Details</TableHead>
-                                        <TableHead>Time</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {auditLogs.map(log => (
-                                        <TableRow key={log.id}>
-                                            <TableCell>
-                                                <Badge variant={log.action === 'DELETE' ? 'destructive' : log.action === 'EDIT' ? 'secondary' : 'default'}>
-                                                    {log.action}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell className="text-sm">{log.note}</TableCell>
-                                            <TableCell className="text-xs text-muted-foreground">
-                                                {new Date(log.timestamp).toLocaleString()}
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                    {auditLogs.length === 0 && (
+                            <div className="max-h-[600px] overflow-y-auto">
+                                <Table>
+                                    <TableHeader className="sticky top-0 bg-white">
                                         <TableRow>
-                                            <TableCell colSpan={3} className="text-center py-8 text-muted-foreground italic">No history yet.</TableCell>
+                                            <TableHead className="w-[100px]">Action</TableHead>
+                                            <TableHead className="w-[100px]">Role</TableHead>
+                                            <TableHead>Activity Details (Who, What &amp; When)</TableHead>
+                                            <TableHead className="text-right w-[180px]">Timestamp</TableHead>
                                         </TableRow>
-                                    )}
-                                </TableBody>
-                            </Table>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {auditLogs.map(log => (
+                                            <TableRow key={log.id}>
+                                                <TableCell>
+                                                    <Badge variant={log.action === 'DELETE' ? 'destructive' : log.action === 'EDIT' ? 'secondary' : 'default'}>
+                                                        {log.action}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Badge variant="outline" className="text-[11px] uppercase font-mono">
+                                                        {log.role || 'user'}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell className="text-sm font-medium text-slate-800">
+                                                    {log.note}
+                                                </TableCell>
+                                                <TableCell className="text-xs text-muted-foreground text-right font-mono">
+                                                    {new Date(log.timestamp).toLocaleString()}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                        {auditLogs.length === 0 && (
+                                            <TableRow>
+                                                <TableCell colSpan={4} className="text-center py-8 text-muted-foreground italic">No history yet.</TableCell>
+                                            </TableRow>
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </div>
                         </CardContent>
                     </Card>
                 </TabsContent>

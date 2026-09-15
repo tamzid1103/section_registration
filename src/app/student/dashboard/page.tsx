@@ -263,11 +263,14 @@ export default function StudentDashboard() {
                 } else {
                     // Audit Log
                     const { data: secData } = await supabase.from('sections').select('name').eq('id', selectedSection).single()
+                    const labName = labGroups.find(l => l.id === labVal)?.name
+                    const labText = labName ? `, Lab: ${labName}` : ' (No Lab)'
+                    const msgText = studentNote.trim() ? ` | Message to Advisor: "${studentNote.trim()}"` : ''
                     await supabase.from('audit_logs').insert({
                         user_id: user.id,
                         role: 'student',
                         action: 'EDIT',
-                        note: `Student modified registration (${newEditCount}/3): ${allowedInfo.name} (${allowedInfo.student_id}) updated section to ${secData?.name}`
+                        note: `Student ${allowedInfo.name} (${allowedInfo.student_id}) self-modified registration (${newEditCount}/3): Section ${secData?.name || ''}${labText}${msgText}`
                     })
 
                     toast.success('Section choices updated successfully!')
@@ -321,11 +324,14 @@ export default function StudentDashboard() {
                 } else {
                     // Audit Log
                     const { data: secData } = await supabase.from('sections').select('name').eq('id', selectedSection).single()
+                    const labName = labGroups.find(l => l.id === labVal)?.name
+                    const labText = labName ? `, Lab: ${labName}` : ' (No Lab)'
+                    const msgText = studentNote.trim() ? ` | Message to Advisor: "${studentNote.trim()}"` : ''
                     await supabase.from('audit_logs').insert({
                         user_id: user.id,
                         role: 'student',
                         action: 'ADD',
-                        note: `Student self-registered: ${allowedInfo.name} (${allowedInfo.student_id}) selected section ${secData?.name}`
+                        note: `Student ${allowedInfo.name} (${allowedInfo.student_id}) self-registered: Section ${secData?.name || ''}${labText}${msgText}`
                     })
 
                     toast.success('Registration successful!')

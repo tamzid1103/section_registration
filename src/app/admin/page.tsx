@@ -216,25 +216,30 @@ export default function AdminDashboard() {
                 <Card className="md:col-span-1 shadow-sm">
                     <CardHeader>
                         <div className="flex items-center justify-between">
-                            <CardTitle className="text-base">Recent System Activity</CardTitle>
+                            <CardTitle className="text-base">Recent Activity ({auditLogs.length})</CardTitle>
                             <Button size="sm" variant="ghost" onClick={exportAuditCSV}>
                                 <Download className="h-3.5 w-3.5 mr-1" /> CSV
                             </Button>
                         </div>
                     </CardHeader>
-                    <CardContent className="space-y-3">
-                        {auditLogs.length === 0 && <p className="text-sm text-muted-foreground italic">No activity yet.</p>}
-                        {auditLogs.map(log => (
-                            <div key={log.id} className="border-b pb-2.5 last:border-0 last:pb-0">
-                                <div className="flex items-center gap-2">
-                                    <Badge variant={log.action === 'DELETE' ? 'destructive' : log.action === 'EDIT' ? 'secondary' : 'default'} className="text-[10px]">
-                                        {log.action}
-                                    </Badge>
-                                    <span className="text-[11px] text-muted-foreground">{new Date(log.timestamp).toLocaleString()}</span>
+                    <CardContent>
+                        <div className="max-h-[420px] overflow-y-auto space-y-3 pr-1">
+                            {auditLogs.length === 0 && <p className="text-sm text-muted-foreground italic">No activity yet.</p>}
+                            {auditLogs.map(log => (
+                                <div key={log.id} className="border-b pb-2.5 last:border-0 last:pb-0">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                        <Badge variant={log.action === 'DELETE' ? 'destructive' : log.action === 'EDIT' ? 'secondary' : 'default'} className="text-[10px]">
+                                            {log.action}
+                                        </Badge>
+                                        <Badge variant="outline" className="text-[10px] font-mono uppercase">
+                                            {log.role || 'user'}
+                                        </Badge>
+                                        <span className="text-[11px] text-muted-foreground ml-auto">{new Date(log.timestamp).toLocaleString()}</span>
+                                    </div>
+                                    <p className="text-xs text-slate-700 mt-1 leading-relaxed font-medium">{log.note}</p>
                                 </div>
-                                <p className="text-xs text-slate-700 mt-1">{log.note}</p>
-                            </div>
-                        ))}
+                            ))}
+                        </div>
                     </CardContent>
                 </Card>
 

@@ -226,6 +226,18 @@ export default function AdvisorDashboard() {
             setStudents(prev =>
                 prev.map(s => s.id === regId ? { ...s, advisor_completed: !current } : s)
             );
+
+            // Audit log
+            const st = students.find(s => s.id === regId)
+            const user = (await supabase.auth.getUser()).data.user
+            if (user) {
+                await supabase.from('audit_logs').insert({
+                    user_id: user.id,
+                    role: 'advisor',
+                    action: 'EDIT',
+                    note: `Advisor ${advisorInfo?.name || 'Unknown'} marked student ${st?.student_name || ''} (${st?.student_id || ''}) as ${!current ? 'Completed ✓' : 'Pending'}`
+                })
+            }
         }
         setToggling(null);
     }
@@ -245,6 +257,18 @@ export default function AdvisorDashboard() {
             toast.error("Failed to save note: " + getFriendlyErrorMessage(error.message));
         } else {
             toast.success("Note saved");
+
+            // Audit log
+            const st = students.find(s => s.id === regId)
+            const user = (await supabase.auth.getUser()).data.user
+            if (user) {
+                await supabase.from('audit_logs').insert({
+                    user_id: user.id,
+                    role: 'advisor',
+                    action: 'EDIT',
+                    note: `Advisor ${advisorInfo?.name || 'Unknown'} added note for student ${st?.student_name || ''} (${st?.student_id || ''}): "${note.trim()}"`
+                })
+            }
         }
         setSavingNote(null);
     }
