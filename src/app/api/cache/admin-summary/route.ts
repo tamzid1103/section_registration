@@ -34,49 +34,79 @@ async function requireAdmin(request: NextRequest) {
     return { adminSupabase }
 }
 
-async function loadAdminSummary() {
+async function loadAdminSummary(targetSemesterId?: string | null) {
     const adminSupabase = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.SUPABASE_SERVICE_ROLE_KEY!,
         { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
-    const [semRes, studRes, crRes, pendRes, logRes, advRes, histRes] = await Promise.all([
-        adminSupabase.from('semesters').select('id, name').eq('is_active', true).maybeSingle(),
-        adminSupabase.from('registrations').select('id', { count: 'exact', head: true }),
+    const [semestersRes, crRes, pendRes, logRes, advRes] = await Promise.all([
+        adminSupabase.from('semesters').select('id, name, is_active, is_locked, created_at').order('created_at', { ascending: false }),
         adminSupabase.from('authorized_staff').select('id', { count: 'exact', head: true }).eq('role', 'cr'),
         adminSupabase.from('cr_applications').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
         adminSupabase.from('audit_logs').select('*').order('timestamp', { ascending: false }).limit(10),
-        adminSupabase.from('advisors').select('id, name, registrations(id, advisor_completed)'),
-        adminSupabase.from('semesters').select('id, name, is_active').order('created_at', { ascending: false }),
+        adminSupabase.from('advisors').select('id, name').order('name'),
     ])
 
-    const semId = semRes.data?.id
-    const { count: secCount } = await adminSupabase
-        .from('sections')
-        .select('id', { count: 'exact', head: true })
-        .eq('semester_id', semId || '')
+    const allSemesters = semestersRes.data || []
+    const selectedSemester = targetSemesterId
+        ? (allSemesters.find((s: any) => s.id === targetSemesterId) || allSemesters.find((s: any) => s.is_active) || allSemesters[0])
+        : (allSemesters.find((s: any) => s.is_active) || allSemesters[0])
+
+    const selectedSemesterId = selectedSemester?.id || null
+
+    let totalStudents = 0
+    let sectionsCount = 0
+    let semesterRegs: any[] = []
+
+    if (selectedSemesterId) {
+        const { data: secData } = await adminSupabase
+            .from('sections')
+            .select('id, name')
+            .eq('semester_id', selectedSemesterId)
+            .order('name')
+
+        const sectionList = secData || []
+        sectionsCount = sectionList.length
+        const sectionIds = sectionList.map((s: any) => s.id)
+
+        if (sectionIds.length > 0) {
+            const { data: regsData } = await adminSupabase
+                .from('registrations')
+                .select('id, advisor_id, advisor_completed, section_id')
+                .in('section_id', sectionIds)
+
+            semesterRegs = regsData || []
+            totalStudents = semesterRegs.length
+        }
+    }
 
     return {
         stats: {
-            totalStudents: studRes.count || 0,
-            activeSemester: semRes.data?.name || 'No Active Semester',
-            sectionsCount: secCount || 0,
+            totalStudents,
+            selectedSemesterId: selectedSemester?.id || null,
+            selectedSemesterName: selectedSemester?.name || 'No Active Semester',
+            isSelectedSemesterActive: Boolean(selectedSemester?.is_active),
+            isSelectedSemesterLocked: Boolean(selectedSemester?.is_locked),
+            sectionsCount,
             crCount: crRes.count || 0,
             pendingApps: pendRes.count || 0,
         },
         auditLogs: logRes.data || [],
         advisorProgress: (advRes.data || []).map((advisor: any) => {
-            const total = advisor.registrations?.length || 0
-            const done = advisor.registrations?.filter((registration: any) => registration.advisor_completed)?.length || 0
+            const advisorRegistrations = semesterRegs.filter((r: any) => r.advisor_id === advisor.id)
+            const total = advisorRegistrations.length
+            const done = advisorRegistrations.filter((r: any) => r.advisor_completed).length
             return {
+                id: advisor.id,
                 name: advisor.name,
                 total,
                 done,
                 pct: total > 0 ? Math.round((done / total) * 100) : 0,
             }
         }),
-        semesterHistory: histRes.data || [],
+        semesterHistory: allSemesters,
     }
 }
 
@@ -84,10 +114,14 @@ export async function GET(request: NextRequest) {
     const guard = await requireAdmin(request)
     if ('error' in guard) return guard.error
 
-    const cached = await withRedisCache(cacheKeys.adminSummary, ADMIN_CACHE_TTL_SECONDS, loadAdminSummary)
+    const semesterId = request.nextUrl.searchParams.get('semesterId')
+    const cacheKey = cacheKeys.adminSummaryKey(semesterId)
+
+    const cached = await withRedisCache(cacheKey, ADMIN_CACHE_TTL_SECONDS, () => loadAdminSummary(semesterId))
 
     return NextResponse.json({
         data: cached.value,
         cache: cached.cacheStatus,
     })
 }
+

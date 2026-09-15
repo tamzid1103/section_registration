@@ -121,13 +121,9 @@ export default function StudentDashboard() {
                 setSelectedLab(regRes.data.lab_group_id || 'none')
                 setStudentNote(regRes.data.note || '')
 
-                // Fetch lab groups for this section
-                const { data: labs } = await supabase
-                    .from('lab_groups')
-                    .select('*')
-                    .eq('section_id', regRes.data.section_id)
-                    .order('name')
-                setLabGroups(labs || [])
+                if (regRes.data.section_id) {
+                    await loadLabGroupsWithCounts(regRes.data.section_id)
+                }
             } else {
                 setRegistration(null)
             }
@@ -142,6 +138,33 @@ export default function StudentDashboard() {
         }
 
         setLoading(false)
+    }
+
+    async function loadLabGroupsWithCounts(secId: string) {
+        if (!secId) {
+            setLabGroups([])
+            return
+        }
+        const [labsRes, regsRes] = await Promise.all([
+            supabase.from('lab_groups').select('*').eq('section_id', secId).order('name'),
+            supabase.from('registrations').select('id, lab_group_id').eq('section_id', secId)
+        ])
+        if (labsRes.data) {
+            const counts: Record<string, number> = {}
+            for (const r of (regsRes.data || [])) {
+                if (r.lab_group_id) {
+                    counts[r.lab_group_id] = (counts[r.lab_group_id] || 0) + 1
+                }
+            }
+            const parsed = labsRes.data.map((lg: any) => ({
+                ...lg,
+                capacity: lg.capacity || 25,
+                current: counts[lg.id] || 0
+            }))
+            setLabGroups(parsed)
+        } else {
+            setLabGroups([])
+        }
     }
 
     async function refreshData() {
@@ -168,13 +191,9 @@ export default function StudentDashboard() {
             setSelectedLab(regRes.data.lab_group_id || 'none')
             setStudentNote(regRes.data.note || '')
 
-            // Fetch lab groups for this section
-            const { data: labs } = await supabase
-                .from('lab_groups')
-                .select('*')
-                .eq('section_id', regRes.data.section_id)
-                .order('name')
-            setLabGroups(labs || [])
+            if (regRes.data.section_id) {
+                await loadLabGroupsWithCounts(regRes.data.section_id)
+            }
         } else {
             setRegistration(null)
         }
@@ -191,13 +210,7 @@ export default function StudentDashboard() {
     async function handleSectionChange(secId: string) {
         setSelectedSection(secId)
         setSelectedLab('none')
-
-        const { data } = await supabase
-            .from('lab_groups')
-            .select('*')
-            .eq('section_id', secId)
-            .order('name')
-        setLabGroups(data || [])
+        await loadLabGroupsWithCounts(secId)
     }
 
     async function handleRegisterOrEditSubmit(e: React.FormEvent) {
@@ -215,10 +228,24 @@ export default function StudentDashboard() {
             return
         }
 
+        const labVal = selectedLab === 'none' ? null : (selectedLab || null)
+
+        // Validate lab capacity (25 max)
+        if (labVal) {
+            const targetLab = labGroups.find(l => l.id === labVal)
+            if (targetLab) {
+                const isCurrentLab = registration && registration.lab_group_id === labVal
+                const cap = targetLab.capacity || 25
+                if (targetLab.current >= cap && !isCurrentLab) {
+                    toast.error(`Lab ${targetLab.name} is full (${targetLab.current}/${cap} seats filled). Please choose another lab group.`)
+                    return
+                }
+            }
+        }
+
         setSubmitting(true)
         try {
             const advisorId = await findAdvisorForStudent(allowedInfo.student_id, semester?.id)
-            const labVal = selectedLab === 'none' ? null : (selectedLab || null)
 
             if (registration) {
                 // Edit choice
@@ -434,11 +461,20 @@ export default function StudentDashboard() {
                                             </SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="none">No Lab Group</SelectItem>
-                                                {labGroups.map(lab => (
-                                                    <SelectItem key={lab.id} value={lab.id}>
-                                                        Lab {lab.name}
-                                                    </SelectItem>
-                                                ))}
+                                                {labGroups.map(lab => {
+                                                    const isCurrentLab = registration && registration.lab_group_id === lab.id;
+                                                    const cap = lab.capacity || 25;
+                                                    const isFull = (lab.current || 0) >= cap;
+                                                    return (
+                                                        <SelectItem 
+                                                            key={lab.id} 
+                                                            value={lab.id}
+                                                            disabled={isFull && !isCurrentLab}
+                                                        >
+                                                            Lab {lab.name} ({lab.current || 0}/{cap} filled) {isFull && !isCurrentLab ? '- FULL' : ''}
+                                                        </SelectItem>
+                                                    );
+                                                })}
                                             </SelectContent>
                                         </Select>
                                     </div>

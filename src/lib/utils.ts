@@ -33,9 +33,14 @@ export function getFriendlyErrorMessage(message: string): string {
         return 'This semester is locked. Updates and registrations are disabled.';
     }
     
+    // Lab group full
+    if (lower.includes('lab group is full') || (lower.includes('lab') && (lower.includes('full') || lower.includes('capacity')))) {
+        return 'The selected lab group is full (maximum 25 students). Please choose another lab group.';
+    }
+
     // Section full
-    if (lower.includes('full') || lower.includes('capacity')) {
-        return 'The selected section capacity is full.';
+    if (lower.includes('section is full') || lower.includes('full') || lower.includes('capacity')) {
+        return 'The selected section capacity is full (maximum 50 students).';
     }
 
     // Foreign key constraints

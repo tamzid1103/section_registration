@@ -1,6 +1,7 @@
 export const cacheKeys = {
     home: 'section-registration:home:v1',
     adminSummary: 'section-registration:admin-summary:v1',
+    adminSummaryKey: (semesterId?: string | null) => `section-registration:admin-summary:${semesterId || 'default'}:v1`,
 } as const
 
 export const cacheScopeKeys: Record<string, readonly string[]> = {

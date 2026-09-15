@@ -85,6 +85,11 @@ export default function CRManagePage() {
         }
     }, [])
 
+    async function fetchAdvisors() {
+        const { data: advs } = await supabase.from('advisors').select('*, student_advisor_ranges(start_id, end_id)').order('name')
+        if (advs) setAdvisors(advs)
+    }
+
     async function init() {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return
@@ -94,8 +99,7 @@ export default function CRManagePage() {
 
         const sem = await fetchActiveSemester()
 
-        const { data: advs } = await supabase.from('advisors').select('*, student_advisor_ranges(start_id, end_id, semesters(name))').order('name')
-        setAdvisors(advs || [])
+        await fetchAdvisors()
 
         await fetchRegistrations()
         await fetchAuditLogs()
@@ -130,6 +134,17 @@ export default function CRManagePage() {
         if (!fName || !fId || !fSection) { toast.error('Name, ID, and Section are required.'); return }
         if (!crInfo || !semester) { toast.error('No active semester or not authorized.'); return }
         if (semester?.is_locked) { toast.error('This semester is locked. CR updates are disabled.'); return }
+
+        // Validate Lab limit
+        if (fLab) {
+            const targetLab = labGroups.find(l => l.id === fLab)
+            const cnt = registrations.filter(r => r.lab_group_id === fLab).length
+            const cap = targetLab?.capacity || 25
+            if (cnt >= cap) {
+                toast.error(`Lab ${targetLab?.name || ''} is full (${cnt}/${cap} seats filled). Please choose another lab group.`)
+                return
+            }
+        }
 
         // Auto-lookup advisor (global across semesters)
         const numId = parseInt(fId.replace(/-/g, ''))
@@ -235,8 +250,24 @@ export default function CRManagePage() {
     async function handleEditSave() {
         if (!editReg) return
         if (semester?.is_locked) { toast.error('This semester is locked. CR updates are disabled.'); return }
+
+        // Validate Lab limit
+        const labVal = editLab === 'none' ? null : (editLab || null)
+        if (labVal) {
+            const isCurrentLab = editReg.lab_group_id === labVal
+            if (!isCurrentLab) {
+                const targetLab = editLabGroups.find(l => l.id === labVal)
+                const cnt = registrations.filter(r => r.lab_group_id === labVal && r.id !== editReg.id).length
+                const cap = targetLab?.capacity || 25
+                if (cnt >= cap) {
+                    toast.error(`Lab ${targetLab?.name || ''} is full (${cnt}/${cap} seats filled). Please choose another lab group.`)
+                    return
+                }
+            }
+        }
+
         const { error } = await supabase.from('registrations').update({
-            section_id: editSection, lab_group_id: editLab || null, note: editNote.trim()
+            section_id: editSection, lab_group_id: labVal, note: editNote.trim()
         }).eq('id', editReg.id)
 
         if (error) { toast.error(getFriendlyErrorMessage(getLockedMessage(error.message))); return }
@@ -797,7 +828,6 @@ export default function CRManagePage() {
                                                     {(a.student_advisor_ranges || []).map((r: any, i: number) => (
                                                         <Badge key={i} variant="outline" className="text-xs">
                                                             {r.start_id} – {r.end_id}
-                                                            {r.semesters?.name ? ` (${r.semesters.name})` : ''}
                                                         </Badge>
                                                     ))}
                                                 </div>
@@ -867,10 +897,21 @@ export default function CRManagePage() {
                             </SelectContent>
                         </Select>
                         {editLabGroups.length > 0 && (
-                            <Select value={editLab} onValueChange={setEditLab}>
+                            <Select value={editLab || 'none'} onValueChange={v => setEditLab(v === 'none' ? '' : v)}>
                                 <SelectTrigger><SelectValue placeholder="Select Lab Group" /></SelectTrigger>
                                 <SelectContent>
-                                    {editLabGroups.map(lg => <SelectItem key={lg.id} value={lg.id}>{lg.name}</SelectItem>)}
+                                    <SelectItem value="none">No Lab Group</SelectItem>
+                                    {editLabGroups.map(lg => {
+                                        const isCurrentLab = editReg?.lab_group_id === lg.id
+                                        const cnt = registrations.filter(r => r.lab_group_id === lg.id && r.id !== editReg?.id).length
+                                        const cap = lg.capacity || 25
+                                        const isFull = cnt >= cap
+                                        return (
+                                            <SelectItem key={lg.id} value={lg.id} disabled={isFull && !isCurrentLab}>
+                                                {lg.name} ({cnt}/{cap}){isFull && !isCurrentLab ? ' — FULL' : ''}
+                                            </SelectItem>
+                                        )
+                                    })}
                                 </SelectContent>
                             </Select>
                         )}

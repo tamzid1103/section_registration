@@ -42,7 +42,6 @@ export default function AdminAdvisorsPage() {
 
     // New range form
     const [rangeAdvisorId, setRangeAdvisorId] = useState('')
-    const [rangeSemesterId, setRangeSemesterId] = useState('')
     const [rangeStart, setRangeStart] = useState('')
     const [rangeEnd, setRangeEnd] = useState('')
 
@@ -56,7 +55,7 @@ export default function AdminAdvisorsPage() {
         const [{ data: adv }, { data: sem }, { data: rng }] = await Promise.all([
             supabase.from('advisors').select('*').order('name'),
             supabase.from('semesters').select('*').order('created_at', { ascending: false }),
-            supabase.from('student_advisor_ranges').select(`*, advisors(name), semesters(name)`).order('created_at'),
+            supabase.from('student_advisor_ranges').select(`*, advisors(name)`).order('created_at'),
         ])
         if (adv) setAdvisors(adv)
         if (sem) setSemesters(sem)
@@ -406,15 +405,14 @@ export default function AdminAdvisorsPage() {
         }
         const { error } = await supabase.from('student_advisor_ranges').insert({
             advisor_id: rangeAdvisorId,
-            semester_id: rangeSemesterId,
             start_id: rangeStart.trim(),
             end_id: rangeEnd.trim(),
         })
         if (error) {
             toast.error(getFriendlyErrorMessage(error.message))
         } else {
-            toast.success('ID range assigned.')
-            setRangeStart(''); setRangeEnd(''); setRangeAdvisorId(''); setRangeSemesterId('')
+            toast.success('ID range assigned across all semesters.')
+            setRangeStart(''); setRangeEnd(''); setRangeAdvisorId('')
             fetchAll()
         }
         setLoading(false)
@@ -534,7 +532,7 @@ export default function AdminAdvisorsPage() {
                     <CardHeader>
                         <CardTitle>Assign Student ID Range</CardTitle>
                         <CardDescription>
-                            Each advisor handles a range of student IDs. Format: 241-15-001
+                            Advisors and their ID ranges apply universally across all semesters. Format: 241-15-001
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -550,20 +548,6 @@ export default function AdminAdvisorsPage() {
                                     <option value="">Select advisor</option>
                                     {advisors.map(a => (
                                         <option key={a.id} value={a.id}>{a.name} — {a.email}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-sm font-medium">Semester *</label>
-                                <select
-                                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                                    value={rangeSemesterId}
-                                    onChange={e => setRangeSemesterId(e.target.value)}
-                                    required
-                                >
-                                    <option value="">Select semester</option>
-                                    {semesters.map(s => (
-                                        <option key={s.id} value={s.id}>{s.name}{s.is_active ? ' (Active)' : ''}</option>
                                     ))}
                                 </select>
                             </div>
@@ -588,7 +572,7 @@ export default function AdminAdvisorsPage() {
                                 </div>
                             </div>
                             <Button type="submit" className="w-full gap-2" disabled={loading}>
-                                <Plus className="h-4 w-4" /> Assign Range
+                                <Plus className="h-4 w-4" /> Assign Range (All Semesters)
                             </Button>
                         </form>
                     </CardContent>
@@ -662,14 +646,13 @@ export default function AdminAdvisorsPage() {
             {/* Ranges List */}
             <Card>
                 <CardHeader>
-                    <CardTitle>Assigned Student ID Ranges</CardTitle>
+                    <CardTitle>Assigned Student ID Ranges (Universal for All Semesters)</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <Table>
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Advisor</TableHead>
-                                <TableHead>Semester</TableHead>
                                 <TableHead>Start ID</TableHead>
                                 <TableHead>End ID</TableHead>
                                 <TableHead className="text-right">Action</TableHead>
@@ -679,9 +662,6 @@ export default function AdminAdvisorsPage() {
                             {ranges.map(r => (
                                 <TableRow key={r.id}>
                                     <TableCell className="font-medium">{r.advisors?.name}</TableCell>
-                                    <TableCell>
-                                        <Badge variant="outline">{r.semesters?.name}</Badge>
-                                    </TableCell>
                                     <TableCell className="font-mono text-sm">{r.start_id}</TableCell>
                                     <TableCell className="font-mono text-sm">{r.end_id}</TableCell>
                                     <TableCell className="text-right">
@@ -697,7 +677,7 @@ export default function AdminAdvisorsPage() {
                             ))}
                             {ranges.length === 0 && (
                                 <TableRow>
-                                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground italic">
+                                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground italic">
                                         No ranges assigned yet.
                                     </TableCell>
                                 </TableRow>
