@@ -19,6 +19,7 @@ import {
 import { Search, Loader2, BookOpen, GraduationCap, Users, CheckCircle2, LogIn, LayoutDashboard, ArrowUp, InfoIcon, KeyRound, User, Shield, Clock3, Timer, Eye, EyeOff, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 type Mode = "login" | "register";
 type RegisterRole = "cr" | "advisor" | "student";
@@ -645,18 +646,18 @@ export default function StudentHub() {
     };
 
     return (
-        <div className="min-h-screen bg-[#F8FAFC]">
+        <div className="min-h-screen bg-background text-foreground transition-colors duration-200">
             {/* Header */}
-            <div className="bg-[#2563EB] text-white pt-16 pb-24 px-6 text-center relative">
+            <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 dark:from-slate-900 dark:via-slate-900 dark:to-slate-950 diu:from-[#0B2545] diu:via-[#07162C] diu:to-[#051224] text-white pt-16 pb-24 px-6 text-center relative border-b border-blue-500/20 dark:border-slate-800 diu:border-emerald-500/30">
                 {/* Small screens: stacked clock above title */}
                 <div className="sm:hidden mb-4">
                     <div className="mx-auto inline-block rounded-xl border border-white/25 bg-white/10 px-4 py-2 text-left shadow-md backdrop-blur-sm">
-                        <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-blue-100">
+                        <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-blue-100 diu:text-amber-200">
                             <Timer className="h-3.5 w-3.5" />
                             {timerDisplay.title}
                         </div>
                         <p className="mt-1 font-mono text-sm font-bold text-white">{mounted ? timerDisplay.value : '—:—:—'}</p>
-                        <div className="mt-1 flex items-center gap-2 text-[11px] text-blue-100">
+                        <div className="mt-1 flex items-center gap-2 text-[11px] text-blue-100 diu:text-slate-300">
                             <Clock3 className="h-3.5 w-3.5" />
                             <span>{mounted ? timerDisplay.subtitle : ''}</span>
                             <span className="rounded border border-white/30 px-1.5 py-0.5 text-[10px]">{timerDisplay.chip}</span>
@@ -666,12 +667,12 @@ export default function StudentHub() {
 
                 {/* Larger screens: floating clock to the left */}
                 <div className="hidden sm:block absolute top-4 left-6 rounded-xl border border-white/25 bg-white/15 px-4 py-2 text-left shadow-md backdrop-blur-sm">
-                    <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-blue-100">
+                    <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-blue-100 diu:text-amber-200">
                         <Timer className="h-3.5 w-3.5" />
                         {timerDisplay.title}
                     </div>
                     <p className="mt-1 font-mono text-sm font-bold text-white sm:text-base">{mounted ? timerDisplay.value : '—:—:—'}</p>
-                    <div className="mt-1 flex items-center gap-2 text-[11px] text-blue-100">
+                    <div className="mt-1 flex items-center gap-2 text-[11px] text-blue-100 diu:text-slate-300">
                         <Clock3 className="h-3.5 w-3.5" />
                         <span>{mounted ? timerDisplay.subtitle : ''}</span>
                         <span className="rounded border border-white/30 px-1.5 py-0.5 text-[10px]">{timerDisplay.chip}</span>
@@ -679,12 +680,13 @@ export default function StudentHub() {
                 </div>
 
                 <h1 className="text-4xl font-extrabold tracking-tight mb-3">DIU Section Pre-Registration</h1>
-                <p className="max-w-xl mx-auto text-blue-100 opacity-90">Check real-time section availability and your registration status.</p>
+                <p className="max-w-xl mx-auto text-blue-100 diu:text-slate-200 opacity-90">Check real-time section availability and your registration status.</p>
 
-                <div className="absolute top-4 right-6 flex items-center gap-2">
+                <div className="absolute top-4 right-6 flex items-center gap-2.5">
+                    <ThemeToggle variant="pills" />
                     {userRole ? (
                         <Link href={dashboardUrl}
-                            className="flex items-center gap-1.5 bg-white text-blue-700 font-semibold text-sm rounded-lg px-3 py-1.5 hover:bg-blue-50 transition-colors shadow-sm">
+                            className="flex items-center gap-1.5 bg-white text-blue-700 diu:bg-emerald-600 diu:text-white font-semibold text-sm rounded-lg px-3 py-1.5 hover:bg-blue-50 diu:hover:bg-emerald-500 transition-colors shadow-sm">
                             <LayoutDashboard className="w-4 h-4" /> Dashboard
                         </Link>
                     ) : (
@@ -693,7 +695,7 @@ export default function StudentHub() {
                                 <button
                                     type="button"
                                     onClick={() => setAuthMode("login")}
-                                    className="flex items-center gap-1.5 text-blue-100 hover:text-white text-sm border border-blue-300 hover:border-white rounded-lg px-3 py-1.5 transition-colors"
+                                    className="flex items-center gap-1.5 text-blue-100 hover:text-white text-sm border border-blue-300 hover:border-white diu:border-emerald-400/40 rounded-lg px-3 py-1.5 transition-colors"
                                 >
                                     <LogIn className="w-4 h-4" /> Student / Staff Login
                                 </button>
