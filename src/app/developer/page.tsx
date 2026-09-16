@@ -6,18 +6,12 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/com
 import { Button } from '@/components/ui/button'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { Shield, Trash2, LogOut, ArrowUp, ArrowDown } from 'lucide-react'
+import { Shield, Trash2, LogOut, ArrowUp, ArrowDown, Code2, Sparkles, UserCheck } from 'lucide-react'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { supabase as supabaseClient } from '@/lib/supabase'
 
 const ROLE_ORDER = ['cr', 'advisor', 'admin', 'developer']
-const ROLE_COLORS: Record<string, string> = {
-    developer: 'bg-purple-600',
-    admin:     'bg-red-500',
-    advisor:   'bg-green-600',
-    cr:        'bg-blue-500',
-}
 
 export default function DeveloperConsolePage() {
     const [staff, setStaff] = useState<any[]>([])
@@ -95,97 +89,119 @@ export default function DeveloperConsolePage() {
     const byRole = (r: string) => staff.filter(s => s.role === r)
 
     return (
-        <div className="container mx-auto p-6 space-y-8">
-            <div className="flex justify-between items-center">
-                <div>
-                    <h1 className="text-4xl font-extrabold flex items-center gap-3">
-                        <Shield className="h-9 w-9 text-purple-600" /> Developer Console
-                    </h1>
-                    <p className="text-muted-foreground mt-1">Highest authority — manage all roles and access.</p>
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+            {/* Header */}
+            <div className="bg-card border border-border/80 rounded-2xl p-5 sm:p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                            <Code2 className="w-3 h-3" /> System Operations
+                        </span>
+                    </div>
+                    <h1 className="text-2xl font-bold tracking-tight text-foreground">Developer Root Console</h1>
+                    <p className="text-xs sm:text-sm text-muted-foreground">
+                        Global role orchestration and administrative hierarchy management.
+                    </p>
                 </div>
-                <Button variant="ghost" size="sm" onClick={handleLogout} className="gap-2">
-                    <LogOut className="h-4 w-4" /> Logout
+
+                <Button variant="ghost" size="sm" onClick={handleLogout} className="text-xs text-muted-foreground hover:text-foreground">
+                    <LogOut className="h-3.5 w-3.5 mr-1" /> Logout
                 </Button>
             </div>
 
-            {/* Stats */}
+            {/* Role Stat KPI Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {ROLE_ORDER.map(role => (
-                    <Card key={role}>
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-xs text-muted-foreground uppercase">{role}s</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold">{byRole(role).length}</div>
-                        </CardContent>
-                    </Card>
+                    <div key={role} className="bg-card border border-border/80 rounded-2xl p-4 shadow-xs flex flex-col justify-between">
+                        <div className="flex items-center justify-between text-muted-foreground">
+                            <span className="text-xs font-semibold uppercase tracking-wider">{role}s</span>
+                            <UserCheck className="h-3.5 w-3.5" />
+                        </div>
+                        <div className="mt-2">
+                            <div className="text-2xl font-bold text-foreground">{byRole(role).length}</div>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">Active accounts</p>
+                        </div>
+                    </div>
                 ))}
             </div>
 
             {/* Staff Table */}
-            <Card>
-                <CardHeader>
-                    <CardTitle>All Authorized Users</CardTitle>
-                    <CardDescription>
-                        Promote / demote / remove users. Developer accounts are protected.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
+            <div className="bg-card border border-border/80 rounded-2xl shadow-xs overflow-hidden">
+                <div className="p-4 sm:p-5 border-b border-border/80 bg-muted/20">
+                    <h3 className="font-semibold text-sm text-foreground">Authorized System Users</h3>
+                    <p className="text-xs text-muted-foreground">Promote, demote, or revoke user privileges.</p>
+                </div>
+
+                <div className="overflow-x-auto">
                     <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Name / Email</TableHead>
-                                <TableHead>Role</TableHead>
-                                <TableHead>Joined</TableHead>
-                                <TableHead className="text-right">Actions</TableHead>
+                        <TableHeader className="bg-muted/30">
+                            <TableRow className="text-xs">
+                                <TableHead className="font-semibold">User Details</TableHead>
+                                <TableHead className="font-semibold">Role Tier</TableHead>
+                                <TableHead className="font-semibold">Registered</TableHead>
+                                <TableHead className="text-right font-semibold">Hierarchy Actions</TableHead>
                             </TableRow>
                         </TableHeader>
-                        <TableBody>
+                        <TableBody className="divide-y divide-border/60">
                             {staff.map((s) => (
-                                <TableRow key={s.id}>
-                                    <TableCell>
-                                        <div className="font-medium text-sm">{s.name || '—'}</div>
-                                        <div className="text-xs text-muted-foreground">{s.email}</div>
+                                <TableRow key={s.id} className="text-xs hover:bg-muted/30">
+                                    <TableCell className="py-3">
+                                        <div className="font-semibold text-foreground">{s.name || '—'}</div>
+                                        <div className="font-mono text-[11px] text-muted-foreground">{s.email}</div>
                                     </TableCell>
                                     <TableCell>
-                                        <Badge className={`${ROLE_COLORS[s.role] || 'bg-slate-400'} capitalize text-white`}>
+                                        <Badge 
+                                            variant="outline" 
+                                            className={`text-[9px] font-bold uppercase ${
+                                                s.role === 'developer' 
+                                                    ? 'border-purple-500/40 text-purple-600 dark:text-purple-400 bg-purple-500/10'
+                                                    : s.role === 'admin'
+                                                    ? 'border-destructive/40 text-destructive bg-destructive/10'
+                                                    : 'border-primary/40 text-primary bg-primary/10'
+                                            }`}
+                                        >
                                             {s.role}
                                         </Badge>
                                     </TableCell>
-                                    <TableCell className="text-xs text-muted-foreground">
+                                    <TableCell className="text-[11px] text-muted-foreground font-mono">
                                         {new Date(s.created_at).toLocaleDateString()}
                                     </TableCell>
                                     <TableCell className="text-right">
                                         <div className="flex justify-end gap-1">
                                             {s.role !== 'developer' && s.role !== 'admin' && (
                                                 <Button
-                                                    size="sm" variant="outline"
+                                                    size="icon" 
+                                                    variant="outline"
+                                                    className="h-7 w-7 text-xs"
                                                     onClick={() => promoteRole(s.id, s.role, s.email)}
                                                     disabled={loading}
-                                                    title="Promote"
+                                                    title="Promote Role"
                                                 >
-                                                    <ArrowUp className="h-3.5 w-3.5" />
+                                                    <ArrowUp className="h-3 w-3" />
                                                 </Button>
                                             )}
                                             {s.role !== 'developer' && s.role !== 'cr' && (
                                                 <Button
-                                                    size="sm" variant="outline"
+                                                    size="icon" 
+                                                    variant="outline"
+                                                    className="h-7 w-7 text-xs"
                                                     onClick={() => demoteRole(s.id, s.role, s.email)}
                                                     disabled={loading}
-                                                    title="Demote"
+                                                    title="Demote Role"
                                                 >
-                                                    <ArrowDown className="h-3.5 w-3.5" />
+                                                    <ArrowDown className="h-3 w-3" />
                                                 </Button>
                                             )}
                                             {s.role !== 'developer' && (
                                                 <Button
-                                                    size="sm" variant="ghost"
-                                                    className="text-destructive hover:text-destructive"
+                                                    size="icon" 
+                                                    variant="ghost"
+                                                    className="h-7 w-7 text-destructive hover:bg-destructive/10"
                                                     onClick={() => removeStaff(s.id, s.role)}
                                                     disabled={loading}
-                                                    title="Remove"
+                                                    title="Revoke Access"
                                                 >
-                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                    <Trash2 className="h-3 w-3" />
                                                 </Button>
                                             )}
                                         </div>
@@ -194,15 +210,15 @@ export default function DeveloperConsolePage() {
                             ))}
                             {staff.length === 0 && (
                                 <TableRow>
-                                    <TableCell colSpan={4} className="text-center py-10 text-muted-foreground italic">
-                                        No staff users yet.
+                                    <TableCell colSpan={4} className="text-center py-12 text-muted-foreground italic text-xs">
+                                        No authorized staff users found.
                                     </TableCell>
                                 </TableRow>
                             )}
                         </TableBody>
                     </Table>
-                </CardContent>
-            </Card>
+                </div>
+            </div>
         </div>
     )
 }

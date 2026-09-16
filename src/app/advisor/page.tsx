@@ -15,7 +15,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription
 } from "@/components/ui/dialog";
-import { Users, Search, CheckCircle2, Circle, LogOut, Download, Printer, AlertTriangle, BookOpen, Mail, CalendarDays, Layers } from "lucide-react";
+import { 
+    Users, Search, CheckCircle2, Circle, LogOut, Download, Printer, 
+    AlertTriangle, BookOpen, Mail, CalendarDays, Layers, Sparkles, Check, CheckCheck 
+} from "lucide-react";
 import { toast } from "sonner";
 import { getFriendlyErrorMessage } from "@/lib/utils";
 import { parseStudentIdNumeric } from "@/lib/advisor-assignment";
@@ -53,7 +56,6 @@ export default function AdvisorDashboard() {
     const [semesters, setSemesters] = useState<Semester[]>([]);
     const [selectedSemesterId, setSelectedSemesterId] = useState<string>("");
     const [offeredCourses, setOfferedCourses] = useState<OfferedCourse[]>([]);
-    const [coursesModalOpen, setCoursesModalOpen] = useState(false);
     const [courseSearchQuery, setCourseSearchQuery] = useState("");
     const [searchQuery, setSearchQuery] = useState("");
     const [sortBy, setSortBy] = useState("id");
@@ -228,15 +230,15 @@ export default function AdvisorDashboard() {
             );
 
             // Audit log
-            const st = students.find(s => s.id === regId)
-            const user = (await supabase.auth.getUser()).data.user
+            const st = students.find(s => s.id === regId);
+            const user = (await supabase.auth.getUser()).data.user;
             if (user) {
                 await supabase.from('audit_logs').insert({
                     user_id: user.id,
                     role: 'advisor',
                     action: 'EDIT',
                     note: `Advisor ${advisorInfo?.name || 'Unknown'} marked student ${st?.student_name || ''} (${st?.student_id || ''}) as ${!current ? 'Completed ✓' : 'Pending'}`
-                })
+                });
             }
         }
         setToggling(null);
@@ -259,15 +261,15 @@ export default function AdvisorDashboard() {
             toast.success("Note saved");
 
             // Audit log
-            const st = students.find(s => s.id === regId)
-            const user = (await supabase.auth.getUser()).data.user
+            const st = students.find(s => s.id === regId);
+            const user = (await supabase.auth.getUser()).data.user;
             if (user) {
                 await supabase.from('audit_logs').insert({
                     user_id: user.id,
                     role: 'advisor',
                     action: 'EDIT',
                     note: `Advisor ${advisorInfo?.name || 'Unknown'} added note for student ${st?.student_name || ''} (${st?.student_id || ''}): "${note.trim()}"`
-                })
+                });
             }
         }
         setSavingNote(null);
@@ -308,7 +310,8 @@ export default function AdvisorDashboard() {
 
     const filtered = students.filter(s =>
         s.student_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        s.student_name.toLowerCase().includes(searchQuery.toLowerCase())
+        s.student_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        s.section_name.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
     const sorted = [...filtered].sort((a, b) => {
@@ -350,59 +353,78 @@ export default function AdvisorDashboard() {
         return missing;
     }, [advisorInfo, students]);
 
-    if (loading) return <div className="p-10 text-center text-muted-foreground">Loading advisor console...</div>;
+    if (loading) {
+        return (
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12 space-y-6">
+                <div className="h-20 bg-muted/50 rounded-2xl animate-pulse" />
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="h-28 bg-muted/40 rounded-2xl animate-pulse" />
+                    <div className="h-28 bg-muted/40 rounded-2xl animate-pulse" />
+                    <div className="h-28 bg-muted/40 rounded-2xl animate-pulse" />
+                </div>
+                <div className="h-64 bg-muted/30 rounded-2xl animate-pulse" />
+            </div>
+        );
+    }
 
     if (!advisorInfo) {
         return (
-            <div className="p-10 text-center space-y-4">
-                <h1 className="text-2xl font-bold text-red-600">Advisor Record Not Found</h1>
-                <p className="text-muted-foreground">Your email is not registered in the advisor list.</p>
-                <Button variant="outline" onClick={handleLogout}>Logout</Button>
+            <div className="max-w-md mx-auto px-4 py-20 text-center space-y-4">
+                <div className="w-12 h-12 rounded-2xl bg-destructive/10 text-destructive flex items-center justify-center mx-auto">
+                    <AlertTriangle className="w-6 h-6" />
+                </div>
+                <h1 className="text-xl font-semibold">Advisor Record Not Found</h1>
+                <p className="text-xs text-muted-foreground">Your account email is not registered in the faculty advising directory.</p>
+                <Button variant="outline" size="sm" onClick={handleLogout} className="text-xs">Logout</Button>
             </div>
         );
     }
 
     const currentSemester = semesters.find(s => s.id === selectedSemesterId);
+    const progressPercent = students.length > 0 ? Math.round((doneCount / students.length) * 100) : 0;
 
     return (
-        <div className="max-w-6xl mx-auto py-10 px-6 space-y-8 print:py-0 print:px-0 print:space-y-4">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-6 print:pb-2">
-                <div className="print:w-full space-y-2">
-                    <div className="flex flex-wrap items-center gap-3">
-                        <h1 className="text-3xl font-bold tracking-tight print:text-xl">Advising Roster: {advisorInfo.name}</h1>
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-6 print:py-0 print:px-0 print:space-y-4">
+            {/* Top Bar Header */}
+            <div className="bg-card border-2 border-border rounded-2xl p-5 sm:p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4 print:border-none print:p-0">
+                <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-bold uppercase tracking-wider text-primary bg-primary/10 px-2.5 py-0.5 rounded-full border border-primary/20">
+                            Faculty Advising
+                        </span>
                         {currentSemester && (
-                            <Badge variant={currentSemester.is_active ? "default" : "secondary"} className={currentSemester.is_active ? "bg-green-600 text-white font-bold" : "bg-amber-100 text-amber-900 border-amber-300 font-bold"}>
-                                {currentSemester.name} {currentSemester.is_active ? "(Active)" : "(Archived)"}
+                            <Badge variant={currentSemester.is_active ? "default" : "secondary"} className="text-xs font-bold">
+                                {currentSemester.name} {currentSemester.is_active ? "• Active" : "• Archived"}
                             </Badge>
                         )}
                     </div>
-                    <p className="text-muted-foreground text-sm print:hidden">
-                        Mark students as completed once you finish their advising session.
-                    </p>
-                    <div className="flex flex-wrap gap-2 pt-1 print:mt-1">
+                    <h1 className="text-2xl font-black tracking-tight text-foreground">
+                        Advising Roster: {advisorInfo.name}
+                    </h1>
+                    <div className="flex flex-wrap gap-1.5 pt-1">
                         {advisorInfo.ranges.map((range: any, i: number) => (
-                            <Badge key={i} variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                            <Badge key={i} variant="outline" className="text-[11px] font-mono text-muted-foreground bg-muted/30 border-border">
                                 Range: {range.start_id} — {range.end_id}
                             </Badge>
                         ))}
                     </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3 print:hidden self-start md:self-center">
-                    {/* Semester Selector Dropdown */}
-                    <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl p-1.5 px-3">
-                        <CalendarDays className="h-4 w-4 text-blue-600 shrink-0" />
-                        <span className="text-xs font-bold text-slate-600 uppercase tracking-wider hidden sm:inline">Semester:</span>
+                <div className="flex flex-wrap items-center gap-2.5 self-start md:self-center print:hidden">
+                    {/* Semester Selector */}
+                    <div className="flex items-center gap-1.5 bg-muted/40 border-2 border-border rounded-xl p-1 px-2.5">
+                        <CalendarDays className="h-3.5 w-3.5 text-primary shrink-0" />
+                        <span className="text-[11px] font-bold text-muted-foreground uppercase hidden sm:inline">Semester:</span>
                         <Select
                             value={selectedSemesterId}
                             onValueChange={(val) => handleSemesterChange(val)}
                         >
-                            <SelectTrigger className="w-[170px] h-8 text-xs font-bold bg-white border-slate-200">
-                                <SelectValue placeholder="Select semester..." />
+                            <SelectTrigger className="w-[150px] h-7 text-xs font-medium bg-background border border-border">
+                                <SelectValue placeholder="Semester..." />
                             </SelectTrigger>
                             <SelectContent>
                                 {semesters.map((sem) => (
-                                    <SelectItem key={sem.id} value={sem.id} className="text-xs font-medium">
+                                    <SelectItem key={sem.id} value={sem.id} className="text-xs">
                                         {sem.name} {sem.is_active ? " (Active)" : ""}
                                     </SelectItem>
                                 ))}
@@ -410,287 +432,285 @@ export default function AdvisorDashboard() {
                         </Select>
                     </div>
 
-                    <Button variant="outline" size="sm" onClick={handleLogout} className="gap-2 text-slate-600 border-slate-200 hover:bg-slate-50">
-                        <LogOut className="h-4 w-4" /> Logout
+                    <Button variant="ghost" size="sm" onClick={handleLogout} className="text-xs font-semibold text-muted-foreground hover:text-foreground">
+                        <LogOut className="h-3.5 w-3.5 mr-1" /> Logout
                     </Button>
                 </div>
             </div>
 
-            {/* Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card className="print:hidden hover:-translate-y-1 hover:shadow-lg transition-all duration-300 cursor-default border-blue-200 bg-gradient-to-br from-blue-50 to-white">
-                    <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                        <CardTitle className="text-sm font-bold text-blue-800">Total Students</CardTitle>
-                        <div className="p-2 bg-blue-100 rounded-full">
-                            <Users className="w-4 h-4 text-blue-600" />
+            {/* KPI Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 print:hidden">
+                {/* Total Assigned */}
+                <div className="bg-card border-2 border-border rounded-2xl p-5 shadow-xs flex items-center justify-between hover:border-primary/40 transition-colors">
+                    <div>
+                        <p className="text-xs font-bold text-muted-foreground">Total Assigned</p>
+                        <p className="text-2xl font-black text-foreground mt-1">{students.length}</p>
+                        <p className="text-[11px] text-muted-foreground font-medium mt-0.5">Students in your ID ranges</p>
+                    </div>
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                        <Users className="w-5 h-5" />
+                    </div>
+                </div>
+
+                {/* Completed */}
+                <div className="bg-card border-2 border-border rounded-2xl p-5 shadow-xs flex flex-col justify-between hover:border-primary/40 transition-colors">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-xs font-bold text-muted-foreground">Advising Completed</p>
+                            <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">{doneCount}</p>
                         </div>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-3xl font-black text-blue-900">{students.length}</div>
-                        <p className="text-[10px] font-bold text-blue-400 mt-1 uppercase tracking-wider">Assigned to you</p>
-                    </CardContent>
-                </Card>
-                <Card className="print:hidden hover:-translate-y-1 hover:shadow-lg transition-all duration-300 cursor-default border-green-200 bg-gradient-to-br from-green-50 to-white">
-                    <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                        <CardTitle className="text-sm font-bold text-green-800">Completed</CardTitle>
-                        <div className="p-2 bg-green-100 rounded-full">
-                            <CheckCircle2 className="w-4 h-4 text-green-600" />
+                        <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                            <CheckCircle2 className="w-5 h-5" />
                         </div>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-3xl font-black text-green-700">{doneCount}</div>
-                        <div className="w-full bg-green-100 h-2.5 rounded-full overflow-hidden mt-2 shadow-inner">
-                            <div className="h-full bg-green-500 transition-all duration-1000 ease-out relative" style={{ width: `${Math.round((doneCount / (students.length || 1)) * 100)}%` }}>
-                                <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
-                            </div>
+                    </div>
+                    <div className="mt-3">
+                        <div className="w-full bg-muted rounded-full h-2 overflow-hidden border border-border/40">
+                            <div 
+                                className="bg-emerald-500 h-full transition-all duration-500 rounded-full" 
+                                style={{ width: `${progressPercent}%` }}
+                            />
                         </div>
-                        <p className="text-[10px] font-bold text-green-600 mt-1.5 uppercase tracking-wider">{Math.round((doneCount / (students.length || 1)) * 100)}% of workload done</p>
-                    </CardContent>
-                </Card>
-                <Card className="print:hidden hover:-translate-y-1 hover:shadow-lg transition-all duration-300 cursor-default border-amber-200 bg-gradient-to-br from-amber-50 to-white">
-                    <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                        <CardTitle className="text-sm font-bold text-amber-800">Remaining</CardTitle>
-                        <div className="p-2 bg-amber-100 rounded-full">
-                            <Circle className="w-4 h-4 text-amber-600" />
-                        </div>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-3xl font-black text-amber-700">{students.length - doneCount}</div>
-                        <p className="text-[10px] font-bold text-amber-500 mt-1 uppercase tracking-wider">Needs your attention</p>
-                    </CardContent>
-                </Card>
+                        <p className="text-[11px] text-muted-foreground mt-1 font-mono font-bold">{progressPercent}% complete</p>
+                    </div>
+                </div>
+
+                {/* Remaining */}
+                <div className="bg-card border-2 border-border rounded-2xl p-5 shadow-xs flex items-center justify-between hover:border-primary/40 transition-colors">
+                    <div>
+                        <p className="text-xs font-bold text-muted-foreground">Pending Attention</p>
+                        <p className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-1">{students.length - doneCount}</p>
+                        <p className="text-[11px] text-muted-foreground font-medium mt-0.5">Awaiting advising approval</p>
+                    </div>
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                        <Circle className="w-5 h-5" />
+                    </div>
+                </div>
             </div>
 
             {/* Missing Students Alert */}
             {missingStudents.length > 0 && (
-                <div className="print:hidden">
-                    <Button 
-                        variant="outline" 
-                        className={`w-full justify-between border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800 transition-all ${showMissing ? 'bg-red-50 rounded-b-none border-b-transparent' : 'bg-red-50/50 shadow-sm'}`}
-                        onClick={() => setShowMissing(!showMissing)}
-                    >
-                        <span className="flex items-center gap-2 font-semibold">
-                            <AlertTriangle className="w-5 h-5" /> 
-                            {missingStudents.length} students in your range are missing
-                        </span>
-                        <span className="text-sm bg-white px-3 py-1 rounded-full border border-red-100 shadow-sm">
-                            {showMissing ? 'Hide List' : 'View List'}
-                        </span>
-                    </Button>
-                    
+                <div className="print:hidden bg-amber-500/10 border-2 border-amber-500/30 rounded-2xl p-4">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-xs font-bold text-amber-800 dark:text-amber-300">
+                            <AlertTriangle className="w-4 h-4" />
+                            <span>{missingStudents.length} expected student ID{missingStudents.length > 1 ? 's' : ''} have not registered yet</span>
+                        </div>
+                        <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="text-xs font-bold h-7 text-amber-800 dark:text-amber-300 hover:bg-amber-500/20"
+                            onClick={() => setShowMissing(!showMissing)}
+                        >
+                            {showMissing ? 'Hide List' : 'View IDs'}
+                        </Button>
+                    </div>
                     {showMissing && (
-                        <Card className="border-red-200 border-t-0 rounded-t-none bg-red-50/30 shadow-inner">
-                            <CardContent className="pt-4 pb-5">
-                                <div className="flex flex-wrap gap-2">
-                                    {missingStudents.slice(0, 50).map(id => (
-                                        <Badge key={id} variant="outline" className="bg-white text-red-600 border-red-200 font-mono py-1 px-2 shadow-sm">
-                                            {id}
-                                        </Badge>
-                                    ))}
-                                    {missingStudents.length > 50 && (
-                                        <Badge variant="outline" className="bg-transparent text-red-600 border-none font-medium">
-                                            + {missingStudents.length - 50} more
-                                        </Badge>
-                                    )}
-                                </div>
-                            </CardContent>
-                        </Card>
+                        <div className="mt-3 pt-3 border-t border-amber-500/20 flex flex-wrap gap-1.5">
+                            {missingStudents.slice(0, 40).map(id => (
+                                <Badge key={id} variant="outline" className="text-[10px] font-mono border-amber-500/40 text-amber-900 dark:text-amber-200">
+                                    {id}
+                                </Badge>
+                            ))}
+                            {missingStudents.length > 40 && (
+                                <span className="text-[11px] text-amber-700 dark:text-amber-400 self-center font-bold">
+                                    + {missingStudents.length - 40} more
+                                </span>
+                            )}
+                        </div>
                     )}
                 </div>
             )}
 
-            {/* Offered Courses Catalog - Always Visible */}
-            <Card className="print:hidden border-blue-200 bg-white shadow-sm overflow-hidden">
-                <CardHeader className="bg-gradient-to-r from-blue-50/80 to-indigo-50/50 border-b pb-3 pt-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <div className="flex items-center gap-2">
-                            <BookOpen className="w-5 h-5 text-blue-600 shrink-0" />
-                            <div>
-                                <CardTitle className="text-base font-bold text-slate-800 flex items-center gap-2">
-                                    Offered Courses Catalog
-                                    <Badge className="bg-blue-600 text-white font-bold px-2 py-0.5 text-xs">
-                                        {offeredCourses.length} Courses
-                                    </Badge>
-                                </CardTitle>
-                                <CardDescription className="text-xs text-slate-500">
-                                    Course codes &amp; titles offered for {currentSemester?.name || 'active semester'}.
-                                </CardDescription>
-                            </div>
+            {/* Offered Courses Catalog */}
+            <div className="bg-card border-2 border-border rounded-2xl shadow-xs overflow-hidden print:hidden">
+                <div className="p-4 sm:p-5 border-b-2 border-border bg-muted/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                        <BookOpen className="w-4 h-4 text-primary shrink-0" />
+                        <div>
+                            <h3 className="font-bold text-sm text-foreground">Offered Courses Catalog</h3>
+                            <p className="text-xs text-muted-foreground font-medium">Reference course codes and credits for {currentSemester?.name || 'active semester'}.</p>
                         </div>
+                        <Badge variant="outline" className="text-[10px] font-mono ml-1 border-border font-bold">
+                            {offeredCourses.length} Courses
+                        </Badge>
+                    </div>
 
-                        <div className="relative w-full sm:w-64">
-                            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                    <div className="relative w-full sm:w-60">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                        <Input
+                            placeholder="Filter course code or title..."
+                            value={courseSearchQuery}
+                            onChange={(e) => setCourseSearchQuery(e.target.value)}
+                            className="pl-8 h-8 text-xs bg-background"
+                        />
+                    </div>
+                </div>
+
+                {offeredCourses.length === 0 ? (
+                    <div className="p-6 text-center text-muted-foreground text-xs italic">
+                        No offered courses cataloged for this semester.
+                    </div>
+                ) : (
+                    <div className="max-h-52 overflow-y-auto">
+                        <Table>
+                            <TableHeader className="bg-muted/30 sticky top-0 z-10">
+                                <TableRow className="text-xs">
+                                    <TableHead className="w-[120px] font-semibold py-2">Course Code</TableHead>
+                                    <TableHead className="font-semibold py-2">Course Title</TableHead>
+                                    <TableHead className="w-[80px] font-semibold text-center py-2">Credits</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody className="divide-y divide-border/60">
+                                {offeredCourses
+                                    .filter(c =>
+                                        c.course_code.toLowerCase().includes(courseSearchQuery.toLowerCase()) ||
+                                        c.course_name.toLowerCase().includes(courseSearchQuery.toLowerCase())
+                                    )
+                                    .map((c) => (
+                                        <TableRow key={c.id} className="text-xs hover:bg-muted/30">
+                                            <TableCell className="font-mono font-bold text-primary py-2">{c.course_code}</TableCell>
+                                            <TableCell className="font-medium text-foreground py-2">{c.course_name}</TableCell>
+                                            <TableCell className="text-center font-mono text-muted-foreground py-2">{c.credit}</TableCell>
+                                        </TableRow>
+                                    ))}
+                            </TableBody>
+                        </Table>
+                    </div>
+                )}
+            </div>
+
+            {/* Student List Table Card */}
+            <div className="bg-card border border-border/80 rounded-2xl shadow-xs overflow-hidden print:border-none print:shadow-none">
+                <div className="p-4 sm:p-5 border-b border-border/80 bg-muted/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 print:hidden">
+                    <div>
+                        <h3 className="font-semibold text-sm text-foreground">Assigned Students Roster</h3>
+                        <p className="text-xs text-muted-foreground">Review registration details and mark advising completion.</p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                        <div className="relative w-full sm:w-48">
+                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                             <Input
-                                placeholder="Search course code or title..."
-                                value={courseSearchQuery}
-                                onChange={(e) => setCourseSearchQuery(e.target.value)}
-                                className="pl-8 h-8 text-xs bg-white border-slate-200 focus-visible:ring-blue-500"
+                                placeholder="Search student..."
+                                className="pl-8 h-8 text-xs bg-background"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
                             />
                         </div>
-                    </div>
-                </CardHeader>
-                <CardContent className="p-0">
-                    {offeredCourses.length === 0 ? (
-                        <div className="p-6 text-center text-slate-500 text-xs italic">
-                            No offered courses listed for this semester yet.
-                        </div>
-                    ) : (
-                        <div className="max-h-60 overflow-y-auto divide-y divide-slate-100">
-                            <Table>
-                                <TableHeader className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur-sm">
-                                    <TableRow className="text-xs">
-                                        <TableHead className="w-[120px] font-bold text-slate-700 py-2">Course Code</TableHead>
-                                        <TableHead className="font-bold text-slate-700 py-2">Course Title</TableHead>
-                                        <TableHead className="w-[80px] font-bold text-center text-slate-700 py-2">Credits</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {offeredCourses
-                                        .filter(c =>
-                                            c.course_code.toLowerCase().includes(courseSearchQuery.toLowerCase()) ||
-                                            c.course_name.toLowerCase().includes(courseSearchQuery.toLowerCase())
-                                        )
-                                        .map((c) => (
-                                            <TableRow key={c.id} className="hover:bg-blue-50/40 text-xs">
-                                                <TableCell className="font-mono font-bold text-blue-700 py-2">{c.course_code}</TableCell>
-                                                <TableCell className="font-medium text-slate-800 py-2">{c.course_name}</TableCell>
-                                                <TableCell className="text-center font-semibold text-slate-600 py-2">{c.credit}</TableCell>
-                                            </TableRow>
-                                        ))}
-                                </TableBody>
-                            </Table>
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
 
-            {/* Student Table */}
-            <Card className="print:shadow-none print:border-none print:m-0 print:p-0">
-                <CardHeader className="print:hidden">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <CardTitle>Student List</CardTitle>
-                            <CardDescription>Mark each student when their advising is done.</CardDescription>
-                        </div>
-                        <div className="flex flex-col md:flex-row items-end md:items-center gap-3">
-                            <div className="relative w-full md:w-56">
-                                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                                <Input
-                                    placeholder="Search by ID or Name"
-                                    className="pl-8 bg-slate-50 border-slate-200 focus-visible:ring-blue-500 transition-all focus:bg-white hover:bg-slate-100/50"
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                />
-                            </div>
-                            <div className="flex flex-wrap items-center gap-2">
-                                <Select value={sortBy} onValueChange={setSortBy}>
-                                    <SelectTrigger className="w-[140px] bg-slate-50 border-slate-200 focus:ring-blue-500 transition-all hover:bg-white">
-                                        <SelectValue placeholder="Sort by" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="id">Student ID</SelectItem>
-                                        <SelectItem value="section">Section</SelectItem>
-                                        <SelectItem value="done">Completed First</SelectItem>
-                                        <SelectItem value="pending">Pending First</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                        <Select value={sortBy} onValueChange={setSortBy}>
+                            <SelectTrigger className="w-[130px] h-8 text-xs bg-background">
+                                <SelectValue placeholder="Sort" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="id">Student ID</SelectItem>
+                                <SelectItem value="section">Section</SelectItem>
+                                <SelectItem value="done">Completed First</SelectItem>
+                                <SelectItem value="pending">Pending First</SelectItem>
+                            </SelectContent>
+                        </Select>
 
-                                <Dialog>
-                                    <DialogTrigger asChild>
-                                        <Button variant="outline" className="gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50 hover:text-indigo-800 transition-colors bg-indigo-50/30">
-                                            <BookOpen className="w-4 h-4" /> <span className="hidden sm:inline">Contact CRs</span>
-                                        </Button>
-                                    </DialogTrigger>
-                                    <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-                                        <DialogHeader>
-                                            <DialogTitle className="text-xl flex items-center gap-2 text-indigo-700">
-                                                <Users className="w-5 h-5" /> CR Directory
-                                            </DialogTitle>
-                                            <DialogDescription>
-                                                List of all Class Representatives in the system. Click their email to send a message.
-                                            </DialogDescription>
-                                        </DialogHeader>
-                                        <div className="grid gap-3 mt-4">
-                                            {crs.length === 0 ? (
-                                                <div className="text-center p-6 text-slate-500 bg-slate-50 rounded-lg border border-dashed">
-                                                    No approved CRs found in the system.
-                                                </div>
-                                            ) : (
-                                                crs.map((cr) => (
-                                                    <div key={cr.id} className="flex items-center justify-between p-4 border rounded-lg bg-white shadow-sm hover:shadow-md transition-shadow">
-                                                        <div>
-                                                            <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                                                                {cr.full_name} 
-                                                                <Badge variant="secondary" className="bg-blue-50 text-blue-700">Sec {cr.section_interested}</Badge>
-                                                            </h3>
-                                                            <p className="text-sm text-slate-500 mt-1 font-mono">ID: {cr.student_id}</p>
-                                                        </div>
-                                                        <a 
-                                                            href={`mailto:${cr.email}`}
-                                                            className="flex items-center gap-2 text-sm px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-colors font-medium"
-                                                        >
-                                                            <Mail className="w-4 h-4" />
-                                                            Email CR
-                                                        </a>
-                                                    </div>
-                                                ))
-                                            )}
+                        {/* Contact CRs Dialog */}
+                        <Dialog>
+                            <DialogTrigger asChild>
+                                <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
+                                    <BookOpen className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Contact CRs</span>
+                                </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-xl">
+                                <DialogHeader>
+                                    <DialogTitle className="text-base font-semibold flex items-center gap-2">
+                                        <Users className="w-4 h-4 text-primary" /> Class Representatives Directory
+                                    </DialogTitle>
+                                    <DialogDescription className="text-xs">
+                                        Approved CR contacts available for advising inquiries.
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <div className="divide-y divide-border/60 max-h-[60vh] overflow-y-auto">
+                                    {crs.length === 0 ? (
+                                        <div className="py-8 text-center text-xs text-muted-foreground italic">
+                                            No approved CRs found in the system.
                                         </div>
-                                    </DialogContent>
-                                </Dialog>
-                                <Button variant="outline" className="gap-2 border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800 transition-colors bg-blue-50/30" onClick={exportToCSV}>
-                                    <Download className="w-4 h-4" /> <span className="hidden sm:inline">Export CSV</span>
-                                </Button>
-                                <Button variant="outline" className="gap-2 border-slate-200 text-slate-700 hover:bg-slate-100 transition-colors bg-slate-50/50" onClick={() => window.print()}>
-                                    <Printer className="w-4 h-4" /> <span className="hidden sm:inline">Print PDF</span>
-                                </Button>
-                            </div>
-                        </div>
+                                    ) : (
+                                        crs.map((cr) => (
+                                            <div key={cr.id} className="py-3 flex items-center justify-between gap-3">
+                                                <div>
+                                                    <div className="font-semibold text-xs text-foreground flex items-center gap-2">
+                                                        {cr.full_name} 
+                                                        <Badge variant="outline" className="text-[10px]">Sec {cr.section_interested}</Badge>
+                                                    </div>
+                                                    <p className="text-[11px] text-muted-foreground font-mono mt-0.5">ID: {cr.student_id}</p>
+                                                </div>
+                                                <a 
+                                                    href={`mailto:${cr.email}`}
+                                                    className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                                                >
+                                                    <Mail className="w-3.5 h-3.5" /> Email CR
+                                                </a>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </DialogContent>
+                        </Dialog>
+
+                        <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={exportToCSV}>
+                            <Download className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Export</span>
+                        </Button>
+                        <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={() => window.print()}>
+                            <Printer className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Print</span>
+                        </Button>
                     </div>
-                </CardHeader>
-                <CardContent className="print:p-0 print:overflow-visible">
-                    <Table className="print:w-full print:text-sm">
-                        <TableHeader className="bg-slate-50/80 border-b border-slate-200 print:bg-transparent">
-                            <TableRow className="hover:bg-transparent">
-                                <TableHead className="font-bold text-slate-700 print:text-black print:font-bold">Student ID</TableHead>
-                                <TableHead className="font-bold text-slate-700 print:text-black print:font-bold">Full Name</TableHead>
-                                <TableHead className="font-bold text-slate-700 print:text-black print:font-bold">Section</TableHead>
-                                <TableHead className="font-bold text-slate-700 print:text-black print:font-bold">Lab Group</TableHead>
-                                <TableHead className="font-bold text-slate-700 print:text-black print:font-bold">Date</TableHead>
-                                <TableHead className="font-bold text-slate-700 print:text-black print:font-bold">Note</TableHead>
-                                <TableHead className="text-right font-bold text-slate-700 print:hidden">Action</TableHead>
+                </div>
+
+                <div className="overflow-x-auto">
+                    <Table className="print:w-full print:text-xs">
+                        <TableHeader className="bg-muted/30">
+                            <TableRow className="text-xs">
+                                <TableHead className="font-semibold">Student ID</TableHead>
+                                <TableHead className="font-semibold">Full Name</TableHead>
+                                <TableHead className="font-semibold">Section</TableHead>
+                                <TableHead className="font-semibold">Lab</TableHead>
+                                <TableHead className="font-semibold">Registered</TableHead>
+                                <TableHead className="font-semibold">Advisor Note</TableHead>
+                                <TableHead className="text-right font-semibold print:hidden">Status / Action</TableHead>
                             </TableRow>
                         </TableHeader>
-                        <TableBody>
+                        <TableBody className="divide-y divide-border/60">
                             {sorted.map((s) => (
                                 <TableRow
                                     key={s.id}
-                                    className={`${s.advisor_completed ? "bg-green-50/60" : ""} print:break-inside-avoid`}
+                                    className={`text-xs hover:bg-muted/30 transition-colors ${s.advisor_completed ? "bg-primary/5" : ""}`}
                                 >
-                                    <TableCell className="font-mono text-sm font-medium">
+                                    <TableCell className="font-mono font-medium text-foreground py-3">
                                         {s.student_id}
                                     </TableCell>
-                                    <TableCell>
-                                        <span className={s.advisor_completed ? "text-green-700 font-semibold" : ""}>
+                                    <TableCell className="font-medium text-foreground">
+                                        <span className={s.advisor_completed ? "text-emerald-600 dark:text-emerald-400 font-semibold" : ""}>
                                             {s.student_name}
                                         </span>
                                     </TableCell>
                                     <TableCell>
-                                        <Badge variant="secondary" className="print:border-slate-300 print:bg-transparent">Section {s.section_name}</Badge>
+                                        <Badge variant="outline" className="text-[11px] font-mono">
+                                            {s.section_name}
+                                        </Badge>
                                     </TableCell>
-                                    <TableCell className="text-muted-foreground">{s.lab_group_name}</TableCell>
-                                    <TableCell className="text-muted-foreground text-sm">{s.created_at}</TableCell>
+                                    <TableCell className="text-muted-foreground font-mono">
+                                        {s.lab_group_name}
+                                    </TableCell>
+                                    <TableCell className="text-muted-foreground text-[11px]">
+                                        {s.created_at}
+                                    </TableCell>
                                     <TableCell>
                                         <Input
-                                            placeholder="Add note..."
-                                            className="h-8 text-sm min-w-[120px] max-w-[200px] print:hidden"
+                                            placeholder="Add advising note..."
+                                            className="h-7 text-xs min-w-[120px] max-w-[220px] print:hidden bg-background"
                                             value={s.advisor_note}
                                             onChange={(e) => updateLocalNote(s.id, e.target.value)}
                                             onBlur={() => saveNote(s.id, s.advisor_note)}
                                             disabled={savingNote === s.id}
                                         />
-                                        {/* Print-only Note Display */}
-                                        <span className="hidden print:inline-block text-sm text-slate-700 max-w-[200px] truncate">
+                                        <span className="hidden print:inline-block text-xs text-muted-foreground">
                                             {s.advisor_note || "—"}
                                         </span>
                                     </TableCell>
@@ -698,31 +718,34 @@ export default function AdvisorDashboard() {
                                         <Button
                                             size="sm"
                                             variant={s.advisor_completed ? "outline" : "default"}
-                                            className={s.advisor_completed
-                                                ? "border-green-500 text-green-700 hover:bg-green-50 gap-1"
-                                                : "gap-1"}
+                                            className={`h-7 text-xs gap-1 font-medium ${
+                                                s.advisor_completed
+                                                    ? "border-emerald-500/40 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20"
+                                                    : ""
+                                            }`}
                                             onClick={() => toggleCompletion(s.id, s.advisor_completed)}
                                             disabled={toggling === s.id}
                                         >
-                                            {s.advisor_completed
-                                                ? <><CheckCircle2 className="h-3.5 w-3.5" /> Done</>
-                                                : <><Circle className="h-3.5 w-3.5" /> Mark Done</>
-                                            }
+                                            {s.advisor_completed ? (
+                                                <><Check className="h-3 w-3" /> Done</>
+                                            ) : (
+                                                <><Circle className="h-3 w-3" /> Mark Done</>
+                                            )}
                                         </Button>
                                     </TableCell>
                                 </TableRow>
                             ))}
                             {sorted.length === 0 && (
                                 <TableRow>
-                                    <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
-                                        No students found.
+                                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground italic text-xs">
+                                        {searchQuery ? "No matching students found." : "No students assigned to your advising ranges for this semester."}
                                     </TableCell>
                                 </TableRow>
                             )}
                         </TableBody>
                     </Table>
-                </CardContent>
-            </Card>
+                </div>
+            </div>
         </div>
     );
 }

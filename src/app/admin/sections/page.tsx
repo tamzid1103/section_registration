@@ -2,14 +2,12 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
-import { Plus, Trash2, ChevronLeft, Layers } from 'lucide-react'
+import { Plus, Trash2, ArrowLeft, Layers, Settings, Users, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { getFriendlyErrorMessage } from '@/lib/utils'
 import Link from 'next/link'
@@ -40,7 +38,6 @@ export default function AdminSections() {
             .from('sections').select('*').eq('semester_id', selectedSemester).order('name')
         if (data) {
             setSections(data)
-            // Fetch lab groups for each section
             const lgMap: Record<string, any[]> = {}
             for (const sec of data) {
                 const { data: lgs } = await supabase
@@ -54,7 +51,6 @@ export default function AdminSections() {
     async function addSection() {
         if (!newName.trim() || !selectedSemester) { toast.error('Enter section name'); return }
 
-        // Insert section (capacity fixed at 50)
         const { data: sec, error } = await supabase
             .from('sections')
             .insert({ name: newName.trim(), capacity: 50, semester_id: selectedSemester })
@@ -62,7 +58,6 @@ export default function AdminSections() {
 
         if (error) { toast.error(getFriendlyErrorMessage(error.message)); return }
 
-        // Auto-create 2 lab groups: sectionName + "1" and sectionName + "2"
         const lg1 = `${newName.trim()}1`
         const lg2 = `${newName.trim()}2`
         const { error: lgErr } = await supabase.from('lab_groups').insert([
@@ -81,9 +76,7 @@ export default function AdminSections() {
     async function deleteSection(sectionId: string, sectionName: string) {
         if (!confirm(`Delete section "${sectionName}" and all its data? This cannot be undone.`)) return
 
-        // Remove registrations in this section first to prevent FK constraint errors
         await supabase.from('registrations').delete().eq('section_id', sectionId)
-
         const { error } = await supabase.from('sections').delete().eq('id', sectionId)
         if (error) { toast.error(getFriendlyErrorMessage(error.message)) }
         else {
@@ -93,106 +86,131 @@ export default function AdminSections() {
         }
     }
 
-    async function toggleSemesterActive(id: string, current: boolean) {
-        if (!current) {
-            // Deactivate all first (only one active at a time)
-            await supabase.from('semesters').update({ is_active: false }).neq('id', id)
-        }
-        await supabase.from('semesters').update({ is_active: !current }).eq('id', id)
-        await invalidateCacheScopes(['home', 'admin'])
-        fetchSemesters()
-    }
+    const currentSem = semesters.find(s => s.id === selectedSemester)
 
     return (
-        <div className="container mx-auto p-6 max-w-5xl space-y-8">
-            <div className="flex items-center gap-3">
-                <Button variant="ghost" size="sm" asChild><Link href="/admin"><ChevronLeft className="h-4 w-4" />Back</Link></Button>
-                <h1 className="text-3xl font-bold">Section Management</h1>
-            </div>
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+            <Link 
+                href="/admin" 
+                className="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors group"
+            >
+                <ArrowLeft className="w-3.5 h-3.5 transition-transform group-hover:-translate-x-0.5" /> Back to Admin Console
+            </Link>
 
-            {/* Semester selector */}
-            <Card>
-                <CardHeader><CardTitle className="flex gap-2 items-center"><Layers className="h-5 w-5" /> Select Semester</CardTitle></CardHeader>
-                <CardContent>
+            {/* Header */}
+            <div className="bg-card border border-border/80 rounded-2xl p-5 sm:p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold uppercase tracking-wider text-primary bg-primary/10 px-2.5 py-0.5 rounded-full">
+                            Curriculum &amp; Cohorts
+                        </span>
+                        {currentSem && (
+                            <Badge variant={currentSem.is_active ? 'default' : 'outline'} className="text-xs">
+                                {currentSem.name}
+                            </Badge>
+                        )}
+                    </div>
+                    <h1 className="text-2xl font-bold tracking-tight text-foreground">Section &amp; Lab Management</h1>
+                    <p className="text-xs sm:text-sm text-muted-foreground">
+                        Create sections (50 capacity) and automatic 25-seat lab group sub-divisions.
+                    </p>
+                </div>
+
+                <div className="flex items-center gap-2 min-w-[200px]">
                     <Select value={selectedSemester} onValueChange={setSelectedSemester}>
-                        <SelectTrigger><SelectValue placeholder="Choose a semester" /></SelectTrigger>
+                        <SelectTrigger className="h-8 text-xs bg-background">
+                            <SelectValue placeholder="Select semester..." />
+                        </SelectTrigger>
                         <SelectContent>
                             {semesters.map(s => (
-                                <SelectItem key={s.id} value={s.id}>
-                                    {s.name}{s.is_active ? ' (Active)' : ''}
+                                <SelectItem key={s.id} value={s.id} className="text-xs">
+                                    {s.name} {s.is_active ? '• Live' : '• Archived'}
                                 </SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
-                </CardContent>
-            </Card>
+                </div>
+            </div>
 
             {selectedSemester && (
                 <>
-                    {/* Add Section */}
-                    <Card>
-                        <CardHeader><CardTitle>Create New Section</CardTitle></CardHeader>
-                        <CardContent className="flex gap-4">
+                    {/* Add Section Card */}
+                    <div className="bg-card border border-border/80 rounded-2xl p-5 shadow-xs space-y-3">
+                        <h3 className="font-semibold text-sm text-foreground">Create New Section</h3>
+                        <div className="flex flex-col sm:flex-row gap-2.5">
                             <Input
-                                placeholder="Section Name (e.g. 66_A)"
+                                placeholder="Section Name (e.g. 66_E or 67_A)"
                                 value={newName}
                                 onChange={e => setNewName(e.target.value)}
                                 onKeyDown={e => e.key === 'Enter' && addSection()}
-                                className="flex-1"
+                                className="h-9 text-xs"
                             />
-                            <Button onClick={addSection}><Plus className="h-4 w-4 mr-1" /> Add Section</Button>
-                        </CardContent>
-                    </Card>
+                            <Button onClick={addSection} size="sm" className="h-9 text-xs shrink-0 font-medium">
+                                <Plus className="h-3.5 w-3.5 mr-1" /> Add Section (50 Seats)
+                            </Button>
+                        </div>
+                    </div>
 
-                    {/* Sections Table */}
-                    <Card>
-                        <CardHeader><CardTitle>Sections ({sections.length})</CardTitle></CardHeader>
-                        <CardContent>
+                    {/* Sections Table Card */}
+                    <div className="bg-card border border-border/80 rounded-2xl shadow-xs overflow-hidden">
+                        <div className="p-4 sm:p-5 border-b border-border/80 bg-muted/20 flex items-center justify-between">
+                            <div>
+                                <h3 className="font-semibold text-sm text-foreground">Configured Sections</h3>
+                                <p className="text-xs text-muted-foreground">{sections.length} active section cohorts in {currentSem?.name}.</p>
+                            </div>
+                        </div>
+
+                        <div className="overflow-x-auto">
                             <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Section</TableHead>
-                                        <TableHead>Lab Groups</TableHead>
-                                        <TableHead>Capacity</TableHead>
-                                        <TableHead className="text-right">Delete</TableHead>
+                                <TableHeader className="bg-muted/30">
+                                    <TableRow className="text-xs">
+                                        <TableHead className="font-semibold">Section</TableHead>
+                                        <TableHead className="font-semibold">Lab Groups (25/each)</TableHead>
+                                        <TableHead className="font-semibold">Total Capacity</TableHead>
+                                        <TableHead className="text-right font-semibold">Action</TableHead>
                                     </TableRow>
                                 </TableHeader>
-                                <TableBody>
+                                <TableBody className="divide-y divide-border/60">
                                     {sections.map(sec => (
-                                        <TableRow key={sec.id}>
-                                            <TableCell className="font-semibold">{sec.name}</TableCell>
+                                        <TableRow key={sec.id} className="text-xs hover:bg-muted/30">
+                                            <TableCell className="font-bold text-foreground py-3">
+                                                Section {sec.name}
+                                            </TableCell>
                                             <TableCell>
-                                                <div className="flex gap-1 flex-wrap">
+                                                <div className="flex gap-1.5 flex-wrap">
                                                     {(labGroups[sec.id] || []).map(lg => (
-                                                        <Badge key={lg.id} variant="outline" className="text-xs">
+                                                        <Badge key={lg.id} variant="outline" className="text-[10px] font-mono bg-muted/40">
                                                             {lg.name} ({lg.capacity} seats)
                                                         </Badge>
                                                     ))}
                                                 </div>
                                             </TableCell>
-                                            <TableCell>{sec.capacity} seats</TableCell>
+                                            <TableCell className="font-mono text-muted-foreground">
+                                                {sec.capacity} seats
+                                            </TableCell>
                                             <TableCell className="text-right">
                                                 <Button
-                                                    size="sm" variant="ghost"
-                                                    className="text-destructive"
+                                                    size="icon" 
+                                                    variant="ghost"
+                                                    className="h-7 w-7 text-destructive hover:bg-destructive/10"
                                                     onClick={() => deleteSection(sec.id, sec.name)}
                                                 >
-                                                    <Trash2 className="h-4 w-4" />
+                                                    <Trash2 className="h-3.5 w-3.5" />
                                                 </Button>
                                             </TableCell>
                                         </TableRow>
                                     ))}
                                     {sections.length === 0 && (
                                         <TableRow>
-                                            <TableCell colSpan={4} className="text-center py-8 text-muted-foreground italic">
-                                                No sections yet. Add one above.
+                                            <TableCell colSpan={4} className="text-center py-10 text-muted-foreground italic text-xs">
+                                                No sections configured for this semester yet.
                                             </TableCell>
                                         </TableRow>
                                     )}
                                 </TableBody>
                             </Table>
-                        </CardContent>
-                    </Card>
+                        </div>
+                    </div>
                 </>
             )}
         </div>

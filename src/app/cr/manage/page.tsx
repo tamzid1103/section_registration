@@ -10,10 +10,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
 import {
     Plus, Trash2, Pencil, CheckCircle2, Circle, Download, Upload,
-    Users, BookOpen, Clock, LogOut, Lock
+    Users, BookOpen, Clock, LogOut, Lock, Search, Sparkles, AlertCircle, FileText, Check
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
@@ -47,9 +47,13 @@ export default function CRManagePage() {
     const [editLabGroups, setEditLabGroups] = useState<any[]>([])
     const [editNote, setEditNote] = useState('')
 
-    // Search
+    // Search & upload
     const [search, setSearch] = useState('')
     const csvRef = useRef<HTMLInputElement>(null)
+    const [uploading, setUploading] = useState(false)
+    const [uploadProgress, setUploadProgress] = useState(0)
+    const [uploadTotal, setUploadTotal] = useState(0)
+    const [uploadCurrent, setUploadCurrent] = useState(0)
 
     const getLockedMessage = (message: string) => {
         if (message.toLowerCase().includes('semester_locked')) {
@@ -98,9 +102,7 @@ export default function CRManagePage() {
         setCrInfo(staff)
 
         const sem = await fetchActiveSemester()
-
         await fetchAdvisors()
-
         await fetchRegistrations()
         await fetchAuditLogs()
     }
@@ -210,11 +212,12 @@ export default function CRManagePage() {
             note: `CR ${crInfo?.name || 'Unknown'} (${crInfo?.email || ''}) registered student ${fName.trim()} (${fId.trim()}) to Section ${secName}${labText}${noteText}`
         })
 
-        toast.success('Student registered!')
+        toast.success('Student registered successfully.')
         await invalidateCacheScopes(['home', 'admin'])
         setFName(''); setFId(''); setFSection(''); setFLab(''); setFNote('')
         setLabGroups([])
         fetchRegistrations()
+        fetchAuditLogs()
     }
 
     // ── Delete Student ───────────────────────────────────────────────────────
@@ -301,11 +304,6 @@ export default function CRManagePage() {
         fetchRegistrations(); fetchAuditLogs()
     }
 
-    const [uploading, setUploading] = useState(false)
-    const [uploadProgress, setUploadProgress] = useState(0)
-    const [uploadTotal, setUploadTotal] = useState(0)
-    const [uploadCurrent, setUploadCurrent] = useState(0)
-
     function parseCSVRow(row: string) {
         const result = []
         let current = ''
@@ -350,7 +348,6 @@ export default function CRManagePage() {
 
         let success = 0, fail = 0
 
-        // Get ranges for advisor lookup (global across semesters)
         const { data: ranges } = await supabase.from('student_advisor_ranges')
             .select('advisor_id, start_id_numeric, end_id_numeric')
 
@@ -436,7 +433,7 @@ export default function CRManagePage() {
                 })
             }
 
-            toast.success(`Import done: ${success} added, ${fail} failed.`)
+            toast.success(`Import complete: ${success} added, ${fail} failed.`)
         } catch (err: any) {
             toast.error(`Error importing CSV: ${err.message}`)
         } finally {
@@ -470,7 +467,6 @@ export default function CRManagePage() {
         }
 
         const previewWindow = window.open('', '_blank')
-
         if (!previewWindow) {
             toast.error('Popup blocked. Please allow popups to open the print preview.')
             return
@@ -496,65 +492,28 @@ export default function CRManagePage() {
     <title>Registrations - ${semester?.name || 'Export'}</title>
     <style>
         @page { size: auto; margin: 12mm; }
-        body {
-            font-family: Arial, Helvetica, sans-serif;
-            color: #111;
-            margin: 0;
-            padding: 24px;
-        }
-        h1 {
-            font-size: 20px;
-            margin: 0 0 6px;
-        }
-        .meta {
-            font-size: 12px;
-            color: #555;
-            margin-bottom: 18px;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            table-layout: fixed;
-            font-size: 11px;
-        }
-        th, td {
-            border: 1px solid #cfcfcf;
-            padding: 6px 8px;
-            vertical-align: top;
-            word-wrap: break-word;
-            overflow-wrap: anywhere;
-        }
-        th {
-            background: #f3f4f6;
-            font-weight: 700;
-            text-align: left;
-        }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #111; margin: 0; padding: 24px; }
+        h1 { font-size: 18px; margin: 0 0 6px; }
+        .meta { font-size: 12px; color: #666; margin-bottom: 16px; }
+        table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 11px; }
+        th, td { border: 1px solid #e2e8f0; padding: 6px 8px; vertical-align: top; word-wrap: break-word; }
+        th { background: #f8fafc; font-weight: 600; text-align: left; }
         tr { break-inside: avoid; page-break-inside: avoid; }
-        .col-id { width: 12%; }
-        .col-name { width: 18%; }
-        .col-section { width: 12%; }
-        .col-lab { width: 12%; }
-        .col-advisor { width: 18%; }
-        .col-done { width: 8%; text-align: center; }
-        .col-time { width: 20%; }
-        @media print {
-            body { padding: 0; }
-        }
     </style>
 </head>
 <body>
     <h1>Registrations - ${semester?.name || 'Export'}</h1>
-    <div class="meta">Total students: ${registrations.length}. Use the browser print dialog to choose orientation, paper size, and destination.</div>
+    <div class="meta">Total students: ${registrations.length} · Printed on: ${new Date().toLocaleString()}</div>
     <table>
         <thead>
             <tr>
-                <th class="col-id">Student ID</th>
-                <th class="col-name">Student Name</th>
-                <th class="col-section">Section</th>
-                <th class="col-lab">Lab Group</th>
-                <th class="col-advisor">Advisor</th>
-                <th class="col-done">Done</th>
-                <th class="col-time">Registered At</th>
+                <th>Student ID</th>
+                <th>Student Name</th>
+                <th>Section</th>
+                <th>Lab Group</th>
+                <th>Advisor</th>
+                <th>Status</th>
+                <th>Timestamp</th>
             </tr>
         </thead>
         <tbody>${rowsHtml}</tbody>
@@ -570,291 +529,354 @@ export default function CRManagePage() {
             previewWindow.focus()
             previewWindow.print()
         }
-
         previewWindow.onload = triggerPrint
         setTimeout(triggerPrint, 500)
     }
 
-    // ── Print PDF ─────────────────────────────────────────────────────────────
-    function printPDF() {
-        const printArea = document.getElementById('print-area')
-        const printContent = printArea?.innerHTML
-
-        if (!printContent) {
-            toast.error('Nothing to print.')
-            return
-        }
-
-        const win = window.open('', '_blank')
-
-        // If popup is blocked, fallback to in-page print
-        if (!win) {
-            toast('Popup blocked — opening print dialog in current tab.')
-            // Add a temporary class for print styling if needed
-            document.documentElement.classList.add('cr-print-mode')
-            setTimeout(() => {
-                window.print()
-                document.documentElement.classList.remove('cr-print-mode')
-            }, 200)
-            return
-        }
-
-        const html = `<!doctype html><html><head><meta charset="utf-8"><title>Registrations - ${semester?.name || ''}</title>` +
-            `<meta name="viewport" content="width=device-width,initial-scale=1"/>` +
-            `<style>body{font-family:Arial,Helvetica,sans-serif;padding:20px;color:#111}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:6px 10px;font-size:12px}th{background:#f0f0f0}</style>` +
-            `</head><body>${printContent}</body></html>`
-
-        try {
-            win.document.open()
-            win.document.write(html)
-            win.document.close()
-            // Ensure printing happens after content has loaded
-            win.focus()
-            win.onload = () => {
-                try { win.print() } catch (e) { console.error('Print failed:', e) }
-            }
-            // Fallback print after short delay if onload doesn't fire
-            setTimeout(() => {
-                try { win.print() } catch (e) { /* ignore */ }
-            }, 600)
-        } catch (e) {
-            console.error('Failed to open print window:', e)
-            toast.error('Unable to open print preview.')
-        }
-    }
-
     const filtered = registrations.filter(r =>
         r.student_id?.toLowerCase().includes(search.toLowerCase()) ||
-        r.student_name?.toLowerCase().includes(search.toLowerCase())
+        r.student_name?.toLowerCase().includes(search.toLowerCase()) ||
+        r.sections?.name?.toLowerCase().includes(search.toLowerCase())
     )
 
     return (
-        <div className="container mx-auto p-6 space-y-6">
-            {/* Header */}
-            <div className="flex justify-between items-center">
-                <div>
-                    <h1 className="text-3xl font-bold">CR Management Portal</h1>
-                    <p className="text-sm text-muted-foreground mt-1">
-                        Logged in as: <span className="font-semibold">{crInfo?.name || crInfo?.email}</span>
-                        <Badge className="ml-2 text-xs">{crInfo?.role}</Badge>
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+            {/* Top Bar Header */}
+            <div className="bg-card border border-border/80 rounded-2xl p-5 sm:p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-semibold uppercase tracking-wider text-primary bg-primary/10 px-2.5 py-0.5 rounded-full">
+                            CR Workspace
+                        </span>
                         {semester?.is_locked ? (
-                            <span className="ml-2 inline-flex items-center gap-2 text-xs font-semibold bg-red-600 text-white px-3 py-1 rounded-md shadow-sm">
-                                <Lock className="h-3 w-3" />
-                                Semester Locked
-                            </span>
+                            <Badge variant="destructive" className="text-xs gap-1">
+                                <Lock className="h-3 w-3" /> Semester Locked
+                            </Badge>
                         ) : (
-                            <span className="ml-2 inline-flex items-center gap-2 text-xs font-semibold bg-green-600 text-white px-3 py-1 rounded-md shadow-sm">
-                                <CheckCircle2 className="h-3 w-3" />
-                                Semester Open
-                            </span>
+                            <Badge variant="outline" className="text-xs gap-1 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 bg-emerald-500/10">
+                                <Check className="h-3 w-3" /> Registration Open
+                            </Badge>
                         )}
+                    </div>
+                    <h1 className="text-2xl font-bold tracking-tight">Class Representative Portal</h1>
+                    <p className="text-xs sm:text-sm text-muted-foreground">
+                        Manage section registrations, student rosters, and batch imports.
                     </p>
                 </div>
-                <div className="flex items-center gap-3">
-                    <Badge variant={semester ? 'default' : 'destructive'} className="py-1 px-3">
-                        {semester ? `📅 ${semester.name}` : 'No Active Semester'}
+
+                <div className="flex items-center gap-2.5 self-start md:self-auto">
+                    <Badge variant="secondary" className="px-3 py-1 text-xs font-medium">
+                        {semester ? semester.name : 'No Active Semester'}
                     </Badge>
-                    <Button variant="ghost" size="sm" onClick={async () => { await supabase.auth.signOut(); router.push('/auth/login') }}>
-                        <LogOut className="h-4 w-4 mr-1" /> Logout
+                    <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="text-xs text-muted-foreground hover:text-foreground"
+                        onClick={async () => { await supabase.auth.signOut(); router.push('/auth/login') }}
+                    >
+                        <LogOut className="h-3.5 w-3.5 mr-1" /> Logout
                     </Button>
                 </div>
             </div>
 
-            <Tabs defaultValue="register">
-                <TabsList className="grid grid-cols-4 w-full max-w-xl">
-                    <TabsTrigger value="register"><Plus className="h-3.5 w-3.5 mr-1" /> Register</TabsTrigger>
-                    <TabsTrigger value="students"><Users className="h-3.5 w-3.5 mr-1" /> Students ({registrations.length})</TabsTrigger>
-                    <TabsTrigger value="advisors"><BookOpen className="h-3.5 w-3.5 mr-1" /> Advisors</TabsTrigger>
-                    <TabsTrigger value="history"><Clock className="h-3.5 w-3.5 mr-1" /> History</TabsTrigger>
-                </TabsList>
+            {/* Main Tabs Container */}
+            <Tabs defaultValue="register" className="space-y-6">
+                <div className="border-b border-border/80 pb-px">
+                    <TabsList className="bg-muted/40 p-1 rounded-xl h-auto gap-1">
+                        <TabsTrigger value="register" className="text-xs sm:text-sm rounded-lg py-1.5 px-3 data-[state=active]:bg-card data-[state=active]:shadow-xs">
+                            <Plus className="h-3.5 w-3.5 mr-1.5" /> Register
+                        </TabsTrigger>
+                        <TabsTrigger value="students" className="text-xs sm:text-sm rounded-lg py-1.5 px-3 data-[state=active]:bg-card data-[state=active]:shadow-xs">
+                            <Users className="h-3.5 w-3.5 mr-1.5" /> Students ({registrations.length})
+                        </TabsTrigger>
+                        <TabsTrigger value="advisors" className="text-xs sm:text-sm rounded-lg py-1.5 px-3 data-[state=active]:bg-card data-[state=active]:shadow-xs">
+                            <BookOpen className="h-3.5 w-3.5 mr-1.5" /> Advisors
+                        </TabsTrigger>
+                        <TabsTrigger value="history" className="text-xs sm:text-sm rounded-lg py-1.5 px-3 data-[state=active]:bg-card data-[state=active]:shadow-xs">
+                            <Clock className="h-3.5 w-3.5 mr-1.5" /> Audit History ({auditLogs.length})
+                        </TabsTrigger>
+                    </TabsList>
+                </div>
 
                 {/* ── REGISTER TAB ─────────────────────────────────────────── */}
-                <TabsContent value="register">
-                    <div className="grid md:grid-cols-2 gap-6">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Add Student</CardTitle>
-                                <CardDescription>Register a student to a section and lab group.</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <form onSubmit={handleRegister} className="space-y-3">
-                                    <Input placeholder="Full Name *" value={fName} onChange={e => setFName(e.target.value)} required />
-                                    <Input placeholder="Student ID (e.g. 241-15-877) *" value={fId} onChange={e => setFId(e.target.value)} required />
-                                    <Select value={fSection} onValueChange={v => { setFSection(v); loadLabGroups(v) }}>
-                                        <SelectTrigger><SelectValue placeholder="Select Section *" /></SelectTrigger>
-                                        <SelectContent>
-                                            {sections.map(s => {
-                                                const cnt = registrations.filter(r => r.section_id === s.id).length
-                                                return (
-                                                    <SelectItem key={s.id} value={s.id} disabled={cnt >= s.capacity}>
-                                                        {s.name} ({cnt}/{s.capacity}){cnt >= s.capacity ? ' — FULL' : ''}
-                                                    </SelectItem>
-                                                )
-                                            })}
-                                        </SelectContent>
-                                    </Select>
-                                    {labGroups.length > 0 && (
-                                        <Select value={fLab} onValueChange={setFLab}>
-                                            <SelectTrigger><SelectValue placeholder="Select Lab Group" /></SelectTrigger>
+                <TabsContent value="register" className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Single Student Form */}
+                        <div className="bg-card border border-border/80 rounded-2xl p-5 sm:p-6 shadow-xs space-y-4">
+                            <div>
+                                <h3 className="font-semibold text-base text-foreground">Add Student</h3>
+                                <p className="text-xs text-muted-foreground">Register an individual student to an available section &amp; lab group.</p>
+                            </div>
+
+                            <form onSubmit={handleRegister} className="space-y-3.5">
+                                <div>
+                                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">Student Full Name *</label>
+                                    <Input 
+                                        placeholder="e.g. John Doe" 
+                                        value={fName} 
+                                        onChange={e => setFName(e.target.value)} 
+                                        className="h-9 text-xs sm:text-sm"
+                                        required 
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">Student ID *</label>
+                                    <Input 
+                                        placeholder="e.g. 241-15-877" 
+                                        value={fId} 
+                                        onChange={e => setFId(e.target.value)} 
+                                        className="h-9 font-mono text-xs sm:text-sm"
+                                        required 
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="text-xs font-medium text-muted-foreground block mb-1.5">Section *</label>
+                                        <Select value={fSection} onValueChange={v => { setFSection(v); loadLabGroups(v) }}>
+                                            <SelectTrigger className="h-9 text-xs">
+                                                <SelectValue placeholder="Select section" />
+                                            </SelectTrigger>
                                             <SelectContent>
-                                                {labGroups.map(lg => {
-                                                    const cnt = registrations.filter(r => r.lab_group_id === lg.id).length
+                                                {sections.map(s => {
+                                                    const cnt = registrations.filter(r => r.section_id === s.id).length
+                                                    const isFull = cnt >= s.capacity
                                                     return (
-                                                        <SelectItem key={lg.id} value={lg.id} disabled={cnt >= lg.capacity}>
-                                                            {lg.name} ({cnt}/{lg.capacity}){cnt >= lg.capacity ? ' — FULL' : ''}
+                                                        <SelectItem key={s.id} value={s.id} disabled={isFull}>
+                                                            {s.name} ({cnt}/{s.capacity}){isFull ? ' — FULL' : ''}
                                                         </SelectItem>
                                                     )
                                                 })}
                                             </SelectContent>
                                         </Select>
-                                    )}
-                                    <Textarea placeholder="Note (Optional)" value={fNote} onChange={e => setFNote(e.target.value)} rows={2} />
-                                    <Button type="submit" className="w-full" disabled={!semester || semester?.is_locked}>
-                                        <Plus className="h-4 w-4 mr-2" /> Register Student
-                                    </Button>
-                                </form>
-                            </CardContent>
-                        </Card>
+                                    </div>
 
-                        {/* Bulk CSV Import */}
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Bulk Import (CSV)</CardTitle>
-                                <CardDescription>
-                                    CSV columns: <code className="text-xs bg-slate-100 px-1 rounded">student_id, student_name, section_name, lab_group_name, note</code>
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                {!uploading ? (
-                                    <div className="border-2 border-dashed rounded-lg p-6 text-center">
-                                        <Upload className="w-8 h-8 mx-auto text-slate-400 mb-2" />
-                                        <p className="text-sm text-muted-foreground mb-3">Upload a CSV file to bulk-register students</p>
-                                        <input type="file" accept=".csv" ref={csvRef} onChange={handleCSVImport} className="hidden" />
-                                        <Button variant="outline" onClick={() => csvRef.current?.click()} disabled={semester?.is_locked}>Choose CSV File</Button>
+                                    <div>
+                                        <label className="text-xs font-medium text-muted-foreground block mb-1.5">Lab Group</label>
+                                        <Select value={fLab} onValueChange={setFLab} disabled={!fSection || labGroups.length === 0}>
+                                            <SelectTrigger className="h-9 text-xs">
+                                                <SelectValue placeholder={labGroups.length === 0 ? "Select section first" : "Choose lab"} />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {labGroups.map(lg => {
+                                                    const cnt = registrations.filter(r => r.lab_group_id === lg.id).length
+                                                    const isFull = cnt >= (lg.capacity || 25)
+                                                    return (
+                                                        <SelectItem key={lg.id} value={lg.id} disabled={isFull}>
+                                                            {lg.name} ({cnt}/{lg.capacity || 25}){isFull ? ' — FULL' : ''}
+                                                        </SelectItem>
+                                                    )
+                                                })}
+                                            </SelectContent>
+                                        </Select>
                                     </div>
-                                ) : (
-                                    <div className="border-2 border-dashed rounded-lg p-6 space-y-4">
-                                        <div className="flex justify-between text-sm font-medium">
-                                            <span className="text-primary flex items-center gap-2">
-                                                <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-                                                Uploading Students...
-                                            </span>
-                                            <span className="text-muted-foreground">{uploadCurrent} / {uploadTotal} ({uploadProgress}%)</span>
-                                        </div>
-                                        <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-3">
-                                            <div 
-                                                className="bg-primary h-3 rounded-full transition-all duration-300 shadow-sm" 
-                                                style={{ width: `${uploadProgress}%` }}
-                                            />
-                                        </div>
-                                        <p className="text-xs text-muted-foreground text-center animate-pulse">
-                                            Please do not close this tab. Processing row {uploadCurrent} of {uploadTotal}...
-                                        </p>
+                                </div>
+
+                                <div>
+                                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">Optional Note</label>
+                                    <Textarea 
+                                        placeholder="Add any retake or batch notes..." 
+                                        value={fNote} 
+                                        onChange={e => setFNote(e.target.value)} 
+                                        rows={2} 
+                                        className="text-xs resize-none"
+                                    />
+                                </div>
+
+                                <Button 
+                                    type="submit" 
+                                    className="w-full text-xs font-medium h-9" 
+                                    disabled={!semester || semester?.is_locked}
+                                >
+                                    <Plus className="h-3.5 w-3.5 mr-1.5" /> Save Registration
+                                </Button>
+                            </form>
+                        </div>
+
+                        {/* Bulk CSV Import Card */}
+                        <div className="bg-card border border-border/80 rounded-2xl p-5 sm:p-6 shadow-xs space-y-4 flex flex-col justify-between">
+                            <div className="space-y-1.5">
+                                <h3 className="font-semibold text-base text-foreground">Bulk CSV Import</h3>
+                                <p className="text-xs text-muted-foreground">
+                                    Upload multiple registrations at once. Required headers:
+                                </p>
+                                <div className="bg-muted/40 p-2.5 rounded-lg border border-border/50 text-[11px] font-mono text-muted-foreground">
+                                    student_id, student_name, section_name, lab_group_name, note
+                                </div>
+                            </div>
+
+                            {!uploading ? (
+                                <div className="border border-dashed border-border/80 rounded-xl p-6 text-center bg-muted/10 space-y-3">
+                                    <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto">
+                                        <Upload className="w-5 h-5" />
                                     </div>
-                                )}
-                                <div className="flex gap-2">
-                                    <Button variant="outline" className="flex-1 gap-2" onClick={exportCSV} disabled={uploading}>
-                                        <Download className="w-4 h-4" /> Export CSV
-                                    </Button>
-                                    <Button variant="outline" className="flex-1 gap-2" onClick={exportPDF} disabled={uploading}>
-                                        <Download className="w-4 h-4" /> Print / PDF
+                                    <div className="space-y-1">
+                                        <p className="text-xs font-medium text-foreground">Upload CSV spreadsheet</p>
+                                        <p className="text-[11px] text-muted-foreground">Standard comma-separated format (.csv)</p>
+                                    </div>
+                                    <input type="file" accept=".csv" ref={csvRef} onChange={handleCSVImport} className="hidden" />
+                                    <Button 
+                                        variant="outline" 
+                                        size="sm"
+                                        onClick={() => csvRef.current?.click()} 
+                                        disabled={semester?.is_locked}
+                                        className="text-xs"
+                                    >
+                                        Select CSV File
                                     </Button>
                                 </div>
-                            </CardContent>
-                        </Card>
+                            ) : (
+                                <div className="border border-dashed border-primary/30 rounded-xl p-6 space-y-3 bg-primary/5">
+                                    <div className="flex justify-between text-xs font-medium">
+                                        <span className="text-primary flex items-center gap-1.5">
+                                            <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+                                            Importing data...
+                                        </span>
+                                        <span className="text-muted-foreground font-mono">{uploadCurrent} / {uploadTotal} ({uploadProgress}%)</span>
+                                    </div>
+                                    <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                                        <div 
+                                            className="bg-primary h-full transition-all duration-200" 
+                                            style={{ width: `${uploadProgress}%` }}
+                                        />
+                                    </div>
+                                    <p className="text-[11px] text-muted-foreground text-center animate-pulse">
+                                        Processing row {uploadCurrent} of {uploadTotal}...
+                                    </p>
+                                </div>
+                            )}
+
+                            <div className="flex gap-2 pt-2">
+                                <Button variant="outline" size="sm" className="flex-1 text-xs gap-1.5" onClick={exportCSV} disabled={uploading}>
+                                    <Download className="w-3.5 h-3.5" /> Export CSV
+                                </Button>
+                                <Button variant="outline" size="sm" className="flex-1 text-xs gap-1.5" onClick={exportPDF} disabled={uploading}>
+                                    <FileText className="w-3.5 h-3.5" /> Print / PDF
+                                </Button>
+                            </div>
+                        </div>
                     </div>
                 </TabsContent>
 
                 {/* ── STUDENTS TAB ─────────────────────────────────────────── */}
                 <TabsContent value="students">
-                    <Card>
-                        <CardHeader>
-                            <div className="flex items-center justify-between">
-                                <CardTitle>All Registered Students</CardTitle>
-                                <Input placeholder="Search by name or ID..." value={search} onChange={e => setSearch(e.target.value)} className="w-64" />
+                    <div className="bg-card border border-border/80 rounded-2xl shadow-xs overflow-hidden">
+                        <div className="p-4 sm:p-5 border-b border-border/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-muted/20">
+                            <div>
+                                <h3 className="font-semibold text-sm text-foreground">Registered Students</h3>
+                                <p className="text-xs text-muted-foreground">Search and manage section assignments.</p>
                             </div>
-                        </CardHeader>
-                        <CardContent>
-                            {/* Printable area */}
-                            <div id="print-area">
-                                <h2 style={{ display: 'none' }} className="print:block font-bold text-lg mb-4">
-                                    {semester?.name} — Registration List
-                                </h2>
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Student ID</TableHead>
-                                            <TableHead>Name</TableHead>
-                                            <TableHead>Section</TableHead>
-                                            <TableHead>Lab Group</TableHead>
-                                            <TableHead>Advisor</TableHead>
-                                            <TableHead>Done</TableHead>
-                                            <TableHead className="text-right">Actions</TableHead>
+                            <div className="relative w-full sm:w-64">
+                                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                                <Input 
+                                    placeholder="Filter by name or ID..." 
+                                    value={search} 
+                                    onChange={e => setSearch(e.target.value)} 
+                                    className="pl-8 h-8 text-xs bg-background"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader className="bg-muted/30">
+                                    <TableRow className="text-xs">
+                                        <TableHead className="font-semibold">Student ID</TableHead>
+                                        <TableHead className="font-semibold">Name</TableHead>
+                                        <TableHead className="font-semibold">Section</TableHead>
+                                        <TableHead className="font-semibold">Lab</TableHead>
+                                        <TableHead className="font-semibold">Advisor</TableHead>
+                                        <TableHead className="font-semibold text-center">Status</TableHead>
+                                        <TableHead className="font-semibold text-right">Actions</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody className="divide-y divide-border/60">
+                                    {filtered.map(r => (
+                                        <TableRow key={r.id} className={`text-xs hover:bg-muted/30 transition-colors ${r.advisor_completed ? 'bg-primary/5' : ''}`}>
+                                            <TableCell className="font-mono font-medium text-foreground py-3">
+                                                {r.student_id}
+                                            </TableCell>
+                                            <TableCell className="font-medium text-foreground">
+                                                <div>{r.student_name}</div>
+                                                {r.note && <div className="text-[10px] text-muted-foreground italic">Note: {r.note}</div>}
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge variant="outline" className="font-mono text-[11px]">
+                                                    {r.sections?.name}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell className="text-muted-foreground">
+                                                {r.lab_groups?.name ? (
+                                                    <span className="font-medium text-foreground">{r.lab_groups.name}</span>
+                                                ) : '—'}
+                                            </TableCell>
+                                            <TableCell className="text-muted-foreground">
+                                                {r.advisors?.name || '—'}
+                                            </TableCell>
+                                            <TableCell className="text-center">
+                                                {r.advisor_completed ? (
+                                                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                                                        <CheckCircle2 className="h-3 w-3" /> Done
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-[10px] text-muted-foreground/60">
+                                                        Pending
+                                                    </span>
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <div className="flex justify-end gap-1">
+                                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => openEdit(r)} disabled={semester?.is_locked}>
+                                                        <Pencil className="h-3 w-3" />
+                                                    </Button>
+                                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:bg-destructive/10" onClick={() => handleDelete(r)} disabled={semester?.is_locked}>
+                                                        <Trash2 className="h-3 w-3" />
+                                                    </Button>
+                                                </div>
+                                            </TableCell>
                                         </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {filtered.map(r => (
-                                            <TableRow key={r.id} className={r.advisor_completed ? 'bg-green-50' : ''}>
-                                                <TableCell className="font-mono text-sm">{r.student_id}</TableCell>
-                                                <TableCell className="font-medium">{r.student_name}</TableCell>
-                                                <TableCell><Badge variant="outline">{r.sections?.name}</Badge></TableCell>
-                                                <TableCell className="text-sm text-muted-foreground">{r.lab_groups?.name || '—'}</TableCell>
-                                                <TableCell className="text-sm text-muted-foreground">{r.advisors?.name || '—'}</TableCell>
-                                                <TableCell>
-                                                    {r.advisor_completed
-                                                        ? <CheckCircle2 className="h-4 w-4 text-green-500" />
-                                                        : <Circle className="h-4 w-4 text-slate-300" />}
-                                                </TableCell>
-                                                <TableCell className="text-right">
-                                                    <div className="flex justify-end gap-1">
-                                                        <Button size="sm" variant="ghost" onClick={() => openEdit(r)} disabled={semester?.is_locked}>
-                                                            <Pencil className="h-3.5 w-3.5" />
-                                                        </Button>
-                                                        <Button size="sm" variant="ghost" className="text-destructive" onClick={() => handleDelete(r)} disabled={semester?.is_locked}>
-                                                            <Trash2 className="h-3.5 w-3.5" />
-                                                        </Button>
-                                                    </div>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                        {filtered.length === 0 && (
-                                            <TableRow>
-                                                <TableCell colSpan={7} className="text-center py-10 text-muted-foreground italic">
-                                                    {search ? 'No results found.' : 'No students registered yet.'}
-                                                </TableCell>
-                                            </TableRow>
-                                        )}
-                                    </TableBody>
-                                </Table>
-                            </div>
-                        </CardContent>
-                    </Card>
+                                    ))}
+                                    {filtered.length === 0 && (
+                                        <TableRow>
+                                            <TableCell colSpan={7} className="text-center py-12 text-muted-foreground text-xs italic">
+                                                {search ? 'No matching students found.' : 'No registered students yet.'}
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    </div>
                 </TabsContent>
 
                 {/* ── ADVISORS TAB ─────────────────────────────────────────── */}
                 <TabsContent value="advisors">
-                    <Card>
-                        <CardHeader><CardTitle>Advisor List</CardTitle></CardHeader>
-                        <CardContent>
+                    <div className="bg-card border border-border/80 rounded-2xl shadow-xs overflow-hidden">
+                        <div className="p-4 sm:p-5 border-b border-border/80 bg-muted/20">
+                            <h3 className="font-semibold text-sm text-foreground">Advisor Distribution Directory</h3>
+                            <p className="text-xs text-muted-foreground">Universal advising allocation ranges configured for students.</p>
+                        </div>
+                        <div className="overflow-x-auto">
                             <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Name</TableHead>
-                                        <TableHead>Email</TableHead>
-                                        <TableHead>Phone</TableHead>
-                                        <TableHead>Student ID Ranges</TableHead>
+                                <TableHeader className="bg-muted/30">
+                                    <TableRow className="text-xs">
+                                        <TableHead className="font-semibold">Faculty Name</TableHead>
+                                        <TableHead className="font-semibold">Email</TableHead>
+                                        <TableHead className="font-semibold">Phone</TableHead>
+                                        <TableHead className="font-semibold">Student ID Ranges</TableHead>
                                     </TableRow>
                                 </TableHeader>
-                                <TableBody>
+                                <TableBody className="divide-y divide-border/60">
                                     {advisors.map(a => (
-                                        <TableRow key={a.id}>
-                                            <TableCell className="font-semibold">{a.name}</TableCell>
-                                            <TableCell className="text-sm text-muted-foreground">{a.email}</TableCell>
-                                            <TableCell className="text-sm">{a.phone || '—'}</TableCell>
+                                        <TableRow key={a.id} className="text-xs hover:bg-muted/30 transition-colors">
+                                            <TableCell className="font-semibold text-foreground">{a.name}</TableCell>
+                                            <TableCell className="font-mono text-muted-foreground">{a.email}</TableCell>
+                                            <TableCell className="text-muted-foreground">{a.phone || '—'}</TableCell>
                                             <TableCell>
                                                 <div className="flex flex-wrap gap-1">
                                                     {(a.student_advisor_ranges || []).map((r: any, i: number) => (
-                                                        <Badge key={i} variant="outline" className="text-xs">
+                                                        <Badge key={i} variant="outline" className="text-[10px] font-mono">
                                                             {r.start_id} – {r.end_id}
                                                         </Badge>
                                                     ))}
@@ -864,102 +886,142 @@ export default function CRManagePage() {
                                     ))}
                                     {advisors.length === 0 && (
                                         <TableRow>
-                                            <TableCell colSpan={4} className="text-center py-8 text-muted-foreground italic">No advisors added yet.</TableCell>
+                                            <TableCell colSpan={4} className="text-center py-10 text-muted-foreground italic text-xs">
+                                                No advisor records found.
+                                            </TableCell>
                                         </TableRow>
                                     )}
                                 </TableBody>
                             </Table>
-                        </CardContent>
-                    </Card>
+                        </div>
+                    </div>
                 </TabsContent>
 
                 {/* ── HISTORY TAB ──────────────────────────────────────────── */}
                 <TabsContent value="history">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Activity History (Last {auditLogs.length} Actions)</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="max-h-[600px] overflow-y-auto">
-                                <Table>
-                                    <TableHeader className="sticky top-0 bg-white">
-                                        <TableRow>
-                                            <TableHead className="w-[100px]">Action</TableHead>
-                                            <TableHead className="w-[100px]">Role</TableHead>
-                                            <TableHead>Activity Details (Who, What &amp; When)</TableHead>
-                                            <TableHead className="text-right w-[180px]">Timestamp</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {auditLogs.map(log => (
-                                            <TableRow key={log.id}>
-                                                <TableCell>
-                                                    <Badge variant={log.action === 'DELETE' ? 'destructive' : log.action === 'EDIT' ? 'secondary' : 'default'}>
-                                                        {log.action}
-                                                    </Badge>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Badge variant="outline" className="text-[11px] uppercase font-mono">
-                                                        {log.role || 'user'}
-                                                    </Badge>
-                                                </TableCell>
-                                                <TableCell className="text-sm font-medium text-slate-800">
-                                                    {log.note}
-                                                </TableCell>
-                                                <TableCell className="text-xs text-muted-foreground text-right font-mono">
-                                                    {new Date(log.timestamp).toLocaleString()}
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                        {auditLogs.length === 0 && (
-                                            <TableRow>
-                                                <TableCell colSpan={4} className="text-center py-8 text-muted-foreground italic">No history yet.</TableCell>
-                                            </TableRow>
-                                        )}
-                                    </TableBody>
-                                </Table>
+                    <div className="bg-card border border-border/80 rounded-2xl shadow-xs overflow-hidden">
+                        <div className="p-4 sm:p-5 border-b border-border/80 bg-muted/20 flex items-center justify-between">
+                            <div>
+                                <h3 className="font-semibold text-sm text-foreground">Audit Activity Log</h3>
+                                <p className="text-xs text-muted-foreground">Chronological audit stream of last {auditLogs.length} actions.</p>
                             </div>
-                        </CardContent>
-                    </Card>
+                            <Badge variant="outline" className="font-mono text-xs">
+                                Limit: 150 Events
+                            </Badge>
+                        </div>
+                        <div className="max-h-[540px] overflow-y-auto">
+                            <Table>
+                                <TableHeader className="sticky top-0 bg-card border-b border-border/80 z-10">
+                                    <TableRow className="text-xs">
+                                        <TableHead className="w-[90px] font-semibold">Action</TableHead>
+                                        <TableHead className="w-[90px] font-semibold">Role</TableHead>
+                                        <TableHead className="font-semibold">Event Description</TableHead>
+                                        <TableHead className="text-right w-[160px] font-semibold">Timestamp</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody className="divide-y divide-border/60">
+                                    {auditLogs.map(log => (
+                                        <TableRow key={log.id} className="text-xs hover:bg-muted/30 transition-colors">
+                                            <TableCell>
+                                                <Badge 
+                                                    variant="outline" 
+                                                    className={`text-[10px] font-bold ${
+                                                        log.action === 'DELETE' 
+                                                            ? 'border-destructive/40 text-destructive bg-destructive/10' 
+                                                            : log.action === 'EDIT' 
+                                                            ? 'border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/10' 
+                                                            : 'border-primary/40 text-primary bg-primary/10'
+                                                    }`}
+                                                >
+                                                    {log.action}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell>
+                                                <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-muted text-muted-foreground font-semibold">
+                                                    {log.role || 'user'}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell className="text-xs text-foreground/90 font-medium">
+                                                {log.note}
+                                            </TableCell>
+                                            <TableCell className="text-[11px] text-muted-foreground text-right font-mono">
+                                                {new Date(log.timestamp).toLocaleString()}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                    {auditLogs.length === 0 && (
+                                        <TableRow>
+                                            <TableCell colSpan={4} className="text-center py-10 text-muted-foreground italic text-xs">
+                                                No activity logged yet.
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    </div>
                 </TabsContent>
             </Tabs>
 
             {/* Edit Dialog */}
             <Dialog open={!!editReg} onOpenChange={v => !v && setEditReg(null)}>
-                <DialogContent>
-                    <DialogHeader><DialogTitle>Edit Student Entry</DialogTitle></DialogHeader>
-                    <div className="space-y-3 py-2">
-                        <p className="text-sm font-medium">{editReg?.student_name} — <span className="font-mono">{editReg?.student_id}</span></p>
-                        <Select value={editSection} onValueChange={onEditSectionChange}>
-                            <SelectTrigger><SelectValue placeholder="Select Section" /></SelectTrigger>
-                            <SelectContent>
-                                {sections.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
-                        {editLabGroups.length > 0 && (
-                            <Select value={editLab || 'none'} onValueChange={v => setEditLab(v === 'none' ? '' : v)}>
-                                <SelectTrigger><SelectValue placeholder="Select Lab Group" /></SelectTrigger>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="text-base font-semibold">Edit Student Registration</DialogTitle>
+                        <DialogDescription className="text-xs">
+                            Modify section or lab group assignment for <span className="font-semibold text-foreground">{editReg?.student_name}</span> ({editReg?.student_id}).
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-3.5 py-2">
+                        <div>
+                            <label className="text-xs font-medium text-muted-foreground block mb-1.5">Section</label>
+                            <Select value={editSection} onValueChange={onEditSectionChange}>
+                                <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Select Section" /></SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="none">No Lab Group</SelectItem>
-                                    {editLabGroups.map(lg => {
-                                        const isCurrentLab = editReg?.lab_group_id === lg.id
-                                        const cnt = registrations.filter(r => r.lab_group_id === lg.id && r.id !== editReg?.id).length
-                                        const cap = lg.capacity || 25
-                                        const isFull = cnt >= cap
-                                        return (
-                                            <SelectItem key={lg.id} value={lg.id} disabled={isFull && !isCurrentLab}>
-                                                {lg.name} ({cnt}/{cap}){isFull && !isCurrentLab ? ' — FULL' : ''}
-                                            </SelectItem>
-                                        )
-                                    })}
+                                    {sections.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                                 </SelectContent>
                             </Select>
+                        </div>
+
+                        {editLabGroups.length > 0 && (
+                            <div>
+                                <label className="text-xs font-medium text-muted-foreground block mb-1.5">Lab Group</label>
+                                <Select value={editLab || 'none'} onValueChange={v => setEditLab(v === 'none' ? '' : v)}>
+                                    <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Select Lab Group" /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="none">No Lab Group</SelectItem>
+                                        {editLabGroups.map(lg => {
+                                            const isCurrentLab = editReg?.lab_group_id === lg.id
+                                            const cnt = registrations.filter(r => r.lab_group_id === lg.id && r.id !== editReg?.id).length
+                                            const cap = lg.capacity || 25
+                                            const isFull = cnt >= cap
+                                            return (
+                                                <SelectItem key={lg.id} value={lg.id} disabled={isFull && !isCurrentLab}>
+                                                    {lg.name} ({cnt}/{cap}){isFull && !isCurrentLab ? ' — FULL' : ''}
+                                                </SelectItem>
+                                            )
+                                        })}
+                                    </SelectContent>
+                                </Select>
+                            </div>
                         )}
-                        <Textarea placeholder="Note (optional)" value={editNote} onChange={e => setEditNote(e.target.value)} rows={2} />
+
+                        <div>
+                            <label className="text-xs font-medium text-muted-foreground block mb-1.5">Note (Optional)</label>
+                            <Textarea 
+                                placeholder="Edit notes..." 
+                                value={editNote} 
+                                onChange={e => setEditNote(e.target.value)} 
+                                rows={2} 
+                                className="text-xs resize-none"
+                            />
+                        </div>
                     </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setEditReg(null)}>Cancel</Button>
-                        <Button onClick={handleEditSave}>Save Changes</Button>
+
+                    <DialogFooter className="gap-2 sm:gap-0">
+                        <Button variant="outline" size="sm" className="text-xs" onClick={() => setEditReg(null)}>Cancel</Button>
+                        <Button size="sm" className="text-xs" onClick={handleEditSave}>Save Changes</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

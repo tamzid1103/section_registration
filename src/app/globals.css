@@ -49,113 +49,113 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* 1. Day Mode (Light) */
+/* 1. Day Mode (Modern Academic Soft Minimalism) */
 :root {
   color-scheme: light;
-  --background: oklch(0.99 0.005 240);
-  --foreground: oklch(0.16 0.02 250);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.16 0.02 250);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.16 0.02 250);
-  --primary: oklch(0.48 0.22 260);
-  --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.96 0.01 240);
-  --secondary-foreground: oklch(0.20 0.02 250);
-  --muted: oklch(0.96 0.01 240);
-  --muted-foreground: oklch(0.50 0.02 250);
-  --accent: oklch(0.95 0.02 260);
-  --accent-foreground: oklch(0.25 0.15 260);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.91 0.01 240);
-  --input: oklch(0.91 0.01 240);
-  --ring: oklch(0.48 0.22 260);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(1 0 0);
-  --sidebar-foreground: oklch(0.16 0.02 250);
-  --sidebar-primary: oklch(0.48 0.22 260);
-  --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.96 0.01 240);
-  --sidebar-accent-foreground: oklch(0.20 0.02 250);
-  --sidebar-border: oklch(0.91 0.01 240);
-  --sidebar-ring: oklch(0.48 0.22 260);
+  --background: #F8F9FA;
+  --foreground: #18181B;
+  --card: #FFFFFF;
+  --card-foreground: #18181B;
+  --popover: #FFFFFF;
+  --popover-foreground: #18181B;
+  --primary: #0F766E; /* Restrained Academic Teal */
+  --primary-foreground: #FFFFFF;
+  --secondary: #F1F5F9;
+  --secondary-foreground: #1E293B;
+  --muted: #F1F5F9;
+  --muted-foreground: #64748B;
+  --accent: #F1F5F9;
+  --accent-foreground: #0F172A;
+  --destructive: #E11D48;
+  --border: #CBD5E1; /* Clearly visible, crisp boundary */
+  --input: #CBD5E1;
+  --ring: #0F766E;
+  --chart-1: #0D9488;
+  --chart-2: #3B82F6;
+  --chart-3: #F59E0B;
+  --chart-4: #8B5CF6;
+  --chart-5: #64748B;
+  --radius: 0.75rem;
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #18181B;
+  --sidebar-primary: #0F766E;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #F1F5F9;
+  --sidebar-accent-foreground: #0F172A;
+  --sidebar-border: #CBD5E1;
+  --sidebar-ring: #0F766E;
 }
 
-/* 2. Night Mode (Dark Obsidian & Neon Blue) */
+/* 2. Night Mode (Soft Minimalist Obsidian) */
 .dark {
   color-scheme: dark;
-  --background: oklch(0.12 0.015 250);
-  --foreground: oklch(0.97 0.005 240);
-  --card: oklch(0.17 0.02 250);
-  --card-foreground: oklch(0.97 0.005 240);
-  --popover: oklch(0.17 0.02 250);
-  --popover-foreground: oklch(0.97 0.005 240);
-  --primary: oklch(0.60 0.22 255);
-  --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.22 0.02 250);
-  --secondary-foreground: oklch(0.95 0 0);
-  --muted: oklch(0.22 0.02 250);
-  --muted-foreground: oklch(0.65 0.02 250);
-  --accent: oklch(0.24 0.04 255);
-  --accent-foreground: oklch(0.95 0.05 255);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(0.25 0.02 250 / 70%);
-  --input: oklch(0.25 0.02 250 / 70%);
-  --ring: oklch(0.60 0.22 255);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.14 0.018 250);
-  --sidebar-foreground: oklch(0.97 0.005 240);
-  --sidebar-primary: oklch(0.60 0.22 255);
-  --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.20 0.025 250);
-  --sidebar-accent-foreground: oklch(0.97 0 0);
-  --sidebar-border: oklch(0.24 0.02 250 / 70%);
-  --sidebar-ring: oklch(0.60 0.22 255);
+  --background: #09090B;
+  --foreground: #FAFAFA;
+  --card: #121215;
+  --card-foreground: #FAFAFA;
+  --popover: #121215;
+  --popover-foreground: #FAFAFA;
+  --primary: #14B8A6;
+  --primary-foreground: #042F2E;
+  --secondary: #18181B;
+  --secondary-foreground: #FAFAFA;
+  --muted: #18181B;
+  --muted-foreground: #A1A1AA;
+  --accent: #18181B;
+  --accent-foreground: #FAFAFA;
+  --destructive: #F43F5E;
+  --border: #333842; /* Visible distinct dark border */
+  --input: #333842;
+  --ring: #14B8A6;
+  --chart-1: #14B8A6;
+  --chart-2: #60A5FA;
+  --chart-3: #FBBF24;
+  --chart-4: #A78BFA;
+  --chart-5: #94A3B8;
+  --sidebar: #09090B;
+  --sidebar-foreground: #FAFAFA;
+  --sidebar-primary: #14B8A6;
+  --sidebar-primary-foreground: #042F2E;
+  --sidebar-accent: #18181B;
+  --sidebar-accent-foreground: #FAFAFA;
+  --sidebar-border: #333842;
+  --sidebar-ring: #14B8A6;
 }
 
-/* 3. DIU Theme (Official Daffodil International University Tri-Color: DIU Navy, Leaf Green, Daffodil Gold) */
+/* 3. DIU Theme (Distinct DIU Academic Vibe: Soft Cool Slate-Blue Canvas, DIU Leaf Green, DIU Royal Navy & Gold) */
 .diu {
-  color-scheme: dark;
-  --background: #07162C;
-  --foreground: #F8FAFC;
-  --card: #0D233F;
-  --card-foreground: #F8FAFC;
-  --popover: #0D233F;
-  --popover-foreground: #F8FAFC;
-  --primary: #10B981; /* DIU Leaf Green */
+  color-scheme: light;
+  --background: #EEF4FA; /* Distinct soft university daylight canvas */
+  --foreground: #081E36; /* Deep navy text for superior contrast */
+  --card: #FFFFFF;
+  --card-foreground: #081E36;
+  --popover: #FFFFFF;
+  --popover-foreground: #081E36;
+  --primary: #008751; /* Official DIU Leaf Emerald */
   --primary-foreground: #FFFFFF;
-  --secondary: #13335A;
-  --secondary-foreground: #FBBF24; /* Daffodil Gold */
-  --muted: #112B4C;
-  --muted-foreground: #94A3B8;
-  --accent: #153E6D;
-  --accent-foreground: #FDE047;
-  --destructive: #EF4444;
-  --border: rgba(30, 64, 110, 0.65);
-  --input: rgba(30, 64, 110, 0.7);
-  --ring: #10B981;
-  --chart-1: #10B981;
-  --chart-2: #F59E0B;
-  --chart-3: #3B82F6;
-  --chart-4: #8B5CF6;
-  --chart-5: #06B6D4;
-  --sidebar: #051224;
-  --sidebar-foreground: #F8FAFC;
-  --sidebar-primary: #10B981;
+  --secondary: #E3EEF7;
+  --secondary-foreground: #08213D;
+  --muted: #E2ECF5;
+  --muted-foreground: #38516D; /* Deep slate readability */
+  --accent: #E0EDF8;
+  --accent-foreground: #08213D;
+  --destructive: #E11D48;
+  --border: #B8D0E2; /* Crisp DIU slate border */
+  --input: #B8D0E2;
+  --ring: #008751;
+  --chart-1: #008751; /* DIU Leaf Green */
+  --chart-2: #0B3B60; /* DIU Royal Navy */
+  --chart-3: #D97706; /* Daffodil Gold */
+  --chart-4: #0284C7;
+  --chart-5: #64748B;
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #081E36;
+  --sidebar-primary: #008751;
   --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #0D284B;
-  --sidebar-accent-foreground: #FBBF24;
-  --sidebar-border: rgba(30, 64, 110, 0.6);
-  --sidebar-ring: #10B981;
+  --sidebar-accent: #E8F4EC;
+  --sidebar-accent-foreground: #005A36;
+  --sidebar-border: #B8D0E2;
+  --sidebar-ring: #008751;
 }
 
 @layer base {
@@ -163,51 +163,18 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground transition-colors duration-200;
+    @apply bg-background text-foreground transition-colors duration-150 antialiased selection:bg-teal-500/20 selection:text-teal-900 dark:selection:bg-teal-400/20 dark:selection:text-teal-200;
   }
   html {
     @apply font-sans;
   }
 }
 
-/* Theme adaptation classes for components with legacy white backgrounds */
-.dark .bg-white {
-  background-color: var(--card) !important;
-  color: var(--card-foreground) !important;
-}
-.dark .bg-slate-50 {
-  background-color: var(--background) !important;
-}
-.dark .text-slate-900, .dark .text-slate-800 {
-  color: #F8FAFC !important;
-}
-.dark .text-slate-700, .dark .text-slate-600 {
-  color: #CBD5E1 !important;
-}
-.dark .text-slate-500 {
-  color: #94A3B8 !important;
-}
-.dark .border-slate-200, .dark .border-slate-100 {
-  border-color: rgba(255, 255, 255, 0.1) !important;
+/* Subtle micro-interaction utilities */
+.academic-card {
+  @apply bg-card text-card-foreground border border-border/80 shadow-xs hover:shadow-sm hover:border-border transition-all duration-150 rounded-xl;
 }
 
-/* DIU Theme specific surface enhancements */
-.diu .bg-white {
-  background-color: #0D233F !important;
-  color: #F8FAFC !important;
-}
-.diu .bg-slate-50, .diu .bg-slate-50\/40, .diu .bg-slate-50\/60 {
-  background-color: #07162C !important;
-}
-.diu .text-slate-900, .diu .text-slate-800 {
-  color: #F8FAFC !important;
-}
-.diu .text-slate-700, .diu .text-slate-600 {
-  color: #E2E8F0 !important;
-}
-.diu .text-slate-500 {
-  color: #94A3B8 !important;
-}
-.diu .border-slate-200, .diu .border-slate-100, .diu .border-slate-200\/80, .diu .border-slate-200\/70 {
-  border-color: rgba(30, 64, 110, 0.65) !important;
+.academic-input {
+  @apply bg-background text-foreground border border-border/90 rounded-lg px-3.5 py-2 text-sm placeholder:text-muted-foreground/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:border-ring transition-all duration-150;
 }

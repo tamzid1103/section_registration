@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from "react"
 import { supabase } from "@/lib/supabase"
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -10,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog"
-import { BookOpen, Plus, Trash2, Download, Upload, Search, RefreshCw, ChevronLeft, Layers, FileText } from "lucide-react"
+import { BookOpen, Plus, Trash2, Download, Upload, Search, RefreshCw, ArrowLeft, Layers, FileText, Sparkles } from "lucide-react"
 import { toast } from "sonner"
 import { getFriendlyErrorMessage } from "@/lib/utils"
 import Link from "next/link"
@@ -139,22 +138,24 @@ export default function AdminOfferedCoursesPage() {
         const selectedSem = semesters.find(s => s.id === selectedSemesterId)
         if (!confirm(`Delete ALL offered courses for ${selectedSem?.name}? This action cannot be undone.`)) return
 
+        setLoading(true)
         const { error } = await supabase
             .from("offered_courses")
             .delete()
             .eq("semester_id", selectedSemesterId)
 
         if (error) {
-            toast.error("Failed to clear courses: " + getFriendlyErrorMessage(error.message))
+            toast.error("Error clearing courses: " + getFriendlyErrorMessage(error.message))
         } else {
-            toast.success("All offered courses cleared for this semester.")
+            toast.success(`All courses for ${selectedSem?.name} deleted.`)
             setCourses([])
         }
+        setLoading(false)
     }
 
     async function handleBulkImport() {
-        if (!selectedSemesterId) { toast.error("Select a semester first."); return }
-        if (!bulkText.trim()) { toast.error("Please paste course lines."); return }
+        if (!selectedSemesterId) { toast.error("Please select a semester."); return }
+        if (!bulkText.trim()) { toast.error("Please paste course text."); return }
 
         setSubmitting(true)
         const lines = bulkText.split("\n").map(l => l.trim()).filter(Boolean)
@@ -165,25 +166,27 @@ export default function AdminOfferedCoursesPage() {
             if (parts.length >= 2) {
                 const code = parts[0].toUpperCase()
                 const name = parts[1]
-                const cred = parts[2] ? parseFloat(parts[2]) || 3.0 : 3.0
-                toInsert.push({
-                    semester_id: selectedSemesterId,
-                    course_code: code,
-                    course_name: name,
-                    credit: cred
-                })
+                const cred = parts[2] ? parseFloat(parts[2]) : 3.0
+                if (code && name) {
+                    toInsert.push({
+                        semester_id: selectedSemesterId,
+                        course_code: code,
+                        course_name: name,
+                        credit: isNaN(cred) ? 3.0 : cred
+                    })
+                }
             }
         }
 
         if (toInsert.length === 0) {
-            toast.error("No valid lines found. Use format: COURSE_CODE, COURSE_NAME, CREDITS")
+            toast.error("Could not parse course entries. Format: CODE, NAME, CREDITS")
             setSubmitting(false)
             return
         }
 
         const { error } = await supabase.from("offered_courses").insert(toInsert)
         if (error) {
-            toast.error("Bulk import failed: " + getFriendlyErrorMessage(error.message))
+            toast.error("Failed to import: " + getFriendlyErrorMessage(error.message))
         } else {
             toast.success(`Successfully imported ${toInsert.length} courses!`)
             setBulkText("")
@@ -196,56 +199,45 @@ export default function AdminOfferedCoursesPage() {
     async function handleCSVFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
         const file = e.target.files?.[0]
         if (!file || !selectedSemesterId) return
-        setSubmitting(true)
 
-        try {
-            const text = await file.text()
-            const lines = text.split("\n").map(l => l.trim()).filter(Boolean)
-            if (lines.length <= 1) {
-                toast.error("CSV file is empty or missing data.")
-                setSubmitting(false)
-                return
-            }
+        const text = await file.text()
+        const lines = text.split("\n").map(l => l.trim()).filter(Boolean)
+        const toInsert: any[] = []
 
-            const headers = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/^"|"$/g, ''))
-            const codeIdx = headers.findIndex(h => h.includes("code"))
-            const nameIdx = headers.findIndex(h => h.includes("name"))
-            const creditIdx = headers.findIndex(h => h.includes("credit"))
+        const startIndex = (lines[0].toLowerCase().includes("code") || lines[0].toLowerCase().includes("course")) ? 1 : 0
 
-            const toInsert: any[] = []
-            for (let i = 1; i < lines.length; i++) {
-                const cols = lines[i].split(",").map(c => c.trim().replace(/^"|"$/g, ''))
-                const code = cols[codeIdx >= 0 ? codeIdx : 0]?.toUpperCase()
-                const name = cols[nameIdx >= 0 ? nameIdx : 1]
-                const cred = cols[creditIdx >= 0 ? creditIdx : 2] ? parseFloat(cols[creditIdx >= 0 ? creditIdx : 2]) || 3.0 : 3.0
-
+        for (let i = startIndex; i < lines.length; i++) {
+            const parts = lines[i].split(",").map(p => p.trim().replace(/^"|"$/g, ''))
+            if (parts.length >= 2) {
+                const code = parts[0].toUpperCase()
+                const name = parts[1]
+                const cred = parts[2] ? parseFloat(parts[2]) : 3.0
                 if (code && name) {
                     toInsert.push({
                         semester_id: selectedSemesterId,
                         course_code: code,
                         course_name: name,
-                        credit: cred
+                        credit: isNaN(cred) ? 3.0 : cred
                     })
                 }
             }
-
-            if (toInsert.length > 0) {
-                const { error } = await supabase.from("offered_courses").insert(toInsert)
-                if (error) {
-                    toast.error("CSV Upload failed: " + getFriendlyErrorMessage(error.message))
-                } else {
-                    toast.success(`Imported ${toInsert.length} courses from CSV!`)
-                    await fetchCoursesForSemester(selectedSemesterId)
-                }
-            } else {
-                toast.error("No valid course rows parsed.")
-            }
-        } catch (err: any) {
-            toast.error("Failed to read CSV: " + err.message)
-        } finally {
-            setSubmitting(false)
-            if (csvRef.current) csvRef.current.value = ""
         }
+
+        if (toInsert.length === 0) {
+            toast.error("No valid course rows found in CSV.")
+            return
+        }
+
+        setLoading(true)
+        const { error } = await supabase.from("offered_courses").insert(toInsert)
+        if (error) {
+            toast.error("Error uploading CSV: " + getFriendlyErrorMessage(error.message))
+        } else {
+            toast.success(`Uploaded ${toInsert.length} courses from CSV!`)
+            await fetchCoursesForSemester(selectedSemesterId)
+        }
+        setLoading(false)
+        if (csvRef.current) csvRef.current.value = ""
     }
 
     function exportToCSV() {
@@ -273,29 +265,37 @@ export default function AdminOfferedCoursesPage() {
     const currentSem = semesters.find(s => s.id === selectedSemesterId)
 
     return (
-        <div className="container mx-auto p-6 space-y-8 max-w-6xl">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-6">
-                <div className="flex items-center gap-3">
-                    <Button variant="ghost" size="sm" asChild>
-                        <Link href="/admin"><ChevronLeft className="h-4 w-4" /> Back</Link>
-                    </Button>
-                    <div>
-                        <h1 className="text-3xl font-extrabold tracking-tight">Offered Courses</h1>
-                        <p className="text-muted-foreground text-sm mt-0.5">Manage course list for advisors and student reference.</p>
-                    </div>
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+            <Link 
+                href="/admin" 
+                className="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors group"
+            >
+                <ArrowLeft className="w-3.5 h-3.5 transition-transform group-hover:-translate-x-0.5" /> Back to Admin Console
+            </Link>
+
+            {/* Header */}
+            <div className="bg-card border border-border/80 rounded-2xl p-5 sm:p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="space-y-1">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-primary bg-primary/10 px-2.5 py-0.5 rounded-full">
+                        Curriculum Catalog
+                    </span>
+                    <h1 className="text-2xl font-bold tracking-tight text-foreground">Offered Courses Catalog</h1>
+                    <p className="text-xs sm:text-sm text-muted-foreground">
+                        Manage course codes, titles, and credit allocations per semester term.
+                    </p>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2.5">
                     {/* Semester Selector */}
-                    <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl p-1.5 px-3">
-                        <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Semester:</span>
+                    <div className="flex items-center gap-1.5 bg-muted/40 border border-border/70 rounded-xl p-1 px-2.5">
+                        <span className="text-[11px] font-semibold text-muted-foreground uppercase hidden sm:inline">Semester:</span>
                         <Select value={selectedSemesterId} onValueChange={handleSemesterChange}>
-                            <SelectTrigger className="w-[180px] h-8 text-xs font-bold bg-white">
+                            <SelectTrigger className="w-[160px] h-7 text-xs font-medium bg-background border-border/60">
                                 <SelectValue placeholder="Select semester..." />
                             </SelectTrigger>
                             <SelectContent>
                                 {semesters.map(s => (
-                                    <SelectItem key={s.id} value={s.id} className="text-xs font-medium">
+                                    <SelectItem key={s.id} value={s.id} className="text-xs">
                                         {s.name} {s.is_active ? " (Active)" : ""}
                                     </SelectItem>
                                 ))}
@@ -303,95 +303,93 @@ export default function AdminOfferedCoursesPage() {
                         </Select>
                     </div>
 
-                    <Button variant="outline" size="sm" onClick={exportToCSV} className="gap-2 text-slate-700">
-                        <Download className="h-4 w-4" /> Export CSV
+                    <Button variant="outline" size="sm" onClick={exportToCSV} className="h-8 text-xs gap-1.5">
+                        <Download className="w-3.5 h-3.5" /> Export
                     </Button>
                 </div>
             </div>
 
-            <div className="grid md:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Form column (Left 1/3) */}
                 <div className="space-y-6">
-                    <Card className="border border-slate-200 shadow-sm">
-                        <CardHeader className="bg-slate-50 border-b pb-4">
-                            <CardTitle className="text-lg font-bold flex items-center gap-2">
-                                <Plus className="h-5 w-5 text-blue-600" /> Single Course Add
-                            </CardTitle>
-                            <CardDescription>Add a course to {currentSem?.name || "selected semester"}.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="pt-6 space-y-4">
-                            <form onSubmit={handleAddSingleCourse} className="space-y-4">
-                                <div className="space-y-1.5">
-                                    <label className="text-xs font-bold uppercase tracking-wider text-slate-600">Course Code</label>
-                                    <Input
-                                        placeholder="e.g. CSE115"
-                                        value={courseCode}
-                                        onChange={e => setCourseCode(e.target.value)}
-                                        className="h-10 font-mono uppercase"
-                                        required
-                                    />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-xs font-bold uppercase tracking-wider text-slate-600">Course Name</label>
-                                    <Input
-                                        placeholder="e.g. Programming Language I"
-                                        value={courseName}
-                                        onChange={e => setCourseName(e.target.value)}
-                                        className="h-10"
-                                        required
-                                    />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-xs font-bold uppercase tracking-wider text-slate-600">Credit Hours</label>
-                                    <Input
-                                        type="number"
-                                        step="0.5"
-                                        placeholder="3.0"
-                                        value={credit}
-                                        onChange={e => setCredit(e.target.value)}
-                                        className="h-10"
-                                    />
-                                </div>
+                    <div className="bg-card border border-border/80 rounded-2xl p-5 shadow-xs space-y-4">
+                        <div className="flex items-center gap-2">
+                            <Plus className="w-4 h-4 text-primary" />
+                            <div>
+                                <h3 className="font-semibold text-sm text-foreground">Add Course</h3>
+                                <p className="text-xs text-muted-foreground">To {currentSem?.name || "selected term"}.</p>
+                            </div>
+                        </div>
 
-                                <Button type="submit" disabled={submitting} className="w-full h-10 font-bold bg-blue-600 hover:bg-blue-700">
-                                    {submitting ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
-                                    Add Course
-                                </Button>
-                            </form>
-                        </CardContent>
-                    </Card>
+                        <form onSubmit={handleAddSingleCourse} className="space-y-3 pt-1">
+                            <div>
+                                <label className="text-xs font-medium text-muted-foreground block mb-1">Course Code *</label>
+                                <Input
+                                    placeholder="e.g. CSE115"
+                                    value={courseCode}
+                                    onChange={e => setCourseCode(e.target.value)}
+                                    className="h-9 text-xs font-mono uppercase"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs font-medium text-muted-foreground block mb-1">Course Title *</label>
+                                <Input
+                                    placeholder="e.g. Programming Language I"
+                                    value={courseName}
+                                    onChange={e => setCourseName(e.target.value)}
+                                    className="h-9 text-xs"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs font-medium text-muted-foreground block mb-1">Credits</label>
+                                <Input
+                                    type="number"
+                                    step="0.5"
+                                    placeholder="3.0"
+                                    value={credit}
+                                    onChange={e => setCredit(e.target.value)}
+                                    className="h-9 text-xs font-mono"
+                                />
+                            </div>
 
-                    {/* Bulk operations card */}
-                    <Card className="border border-slate-200 shadow-sm">
-                        <CardHeader className="bg-slate-50 border-b pb-4">
-                            <CardTitle className="text-base font-bold flex items-center gap-2">
-                                <Upload className="h-4 w-4 text-indigo-600" /> Bulk Import Courses
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="pt-4 space-y-3">
+                            <Button type="submit" disabled={submitting} size="sm" className="w-full text-xs font-medium h-9">
+                                {submitting ? <RefreshCw className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Plus className="h-3.5 w-3.5 mr-1.5" />}
+                                Add Course
+                            </Button>
+                        </form>
+                    </div>
+
+                    {/* Bulk Operations Card */}
+                    <div className="bg-card border border-border/80 rounded-2xl p-5 shadow-xs space-y-3">
+                        <h3 className="font-semibold text-sm text-foreground flex items-center gap-2">
+                            <Upload className="w-4 h-4 text-primary" /> Bulk Import Courses
+                        </h3>
+                        
+                        <div className="space-y-2 pt-1">
                             <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
                                 <DialogTrigger asChild>
-                                    <Button variant="outline" className="w-full justify-start gap-2 h-10 font-medium">
-                                        <FileText className="h-4 w-4 text-blue-600" /> Paste Course List
+                                    <Button variant="outline" size="sm" className="w-full justify-start gap-2 h-8 text-xs">
+                                        <FileText className="h-3.5 w-3.5 text-primary" /> Paste Course List
                                     </Button>
                                 </DialogTrigger>
-                                <DialogContent className="max-w-lg">
+                                <DialogContent className="sm:max-w-md">
                                     <DialogHeader>
-                                        <DialogTitle>Bulk Paste Offered Courses</DialogTitle>
-                                        <DialogDescription>
-                                            Paste course lines in comma-separated format for {currentSem?.name}:<br />
-                                            <code className="text-xs bg-slate-100 p-1 rounded font-mono">CODE, NAME, CREDITS</code>
+                                        <DialogTitle className="text-base font-semibold">Bulk Paste Offered Courses</DialogTitle>
+                                        <DialogDescription className="text-xs">
+                                            Paste lines in format: <code className="font-mono text-[10px] bg-muted px-1 rounded">CODE, NAME, CREDITS</code>
                                         </DialogDescription>
                                     </DialogHeader>
-                                    <div className="space-y-4 py-2">
+                                    <div className="space-y-3 py-2">
                                         <Textarea
                                             placeholder={`CSE115, Programming Language I, 3.0\nCSE115L, Programming Language I Lab, 1.0\nMAT110, Calculus & Geometry, 3.0`}
                                             value={bulkText}
                                             onChange={e => setBulkText(e.target.value)}
                                             rows={8}
-                                            className="font-mono text-xs"
+                                            className="font-mono text-xs resize-none"
                                         />
-                                        <Button onClick={handleBulkImport} disabled={submitting} className="w-full font-bold bg-blue-600">
+                                        <Button onClick={handleBulkImport} disabled={submitting} size="sm" className="w-full text-xs font-medium">
                                             {submitting ? "Importing..." : "Process Bulk Import"}
                                         </Button>
                                     </div>
@@ -407,93 +405,84 @@ export default function AdminOfferedCoursesPage() {
                                     className="hidden"
                                     id="csv-course-input"
                                 />
-                                <label htmlFor="csv-course-input" className="cursor-pointer">
-                                    <Button variant="outline" className="w-full justify-start gap-2 h-10 font-medium pointer-events-none" asChild>
-                                        <div><Upload className="h-4 w-4 text-emerald-600" /> Upload CSV File</div>
+                                <label htmlFor="csv-course-input" className="cursor-pointer block">
+                                    <Button variant="outline" size="sm" className="w-full justify-start gap-2 h-8 text-xs pointer-events-none" asChild>
+                                        <div><Upload className="h-3.5 w-3.5 text-primary" /> Upload CSV File</div>
                                     </Button>
                                 </label>
                             </div>
-                        </CardContent>
-                    </Card>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Table column (Right 2/3) */}
-                <div className="md:col-span-2 space-y-4">
-                    <Card className="border border-slate-200 shadow-sm">
-                        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4">
+                <div className="lg:col-span-2 space-y-4">
+                    <div className="bg-card border border-border/80 rounded-2xl shadow-xs overflow-hidden">
+                        <div className="p-4 sm:p-5 border-b border-border/80 bg-muted/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                             <div>
-                                <CardTitle className="text-xl font-bold flex items-center gap-2">
-                                    <BookOpen className="h-5 w-5 text-blue-600" />
-                                    Course List ({currentSem?.name})
-                                </CardTitle>
-                                <CardDescription>Showing all offered courses for this semester.</CardDescription>
+                                <h3 className="font-semibold text-sm text-foreground">Cataloged Courses</h3>
+                                <p className="text-xs text-muted-foreground">{courses.length} courses offered for {currentSem?.name}.</p>
                             </div>
                             <div className="flex items-center gap-2">
-                                <Badge className="bg-blue-100 text-blue-800 font-bold px-3 py-1 text-sm border-blue-200">
-                                    Total: {courses.length}
-                                </Badge>
                                 {courses.length > 0 && (
-                                    <Button variant="ghost" size="sm" onClick={handleClearAllCourses} className="text-red-600 hover:text-red-700 hover:bg-red-50 text-xs">
-                                        <Trash2 className="h-3.5 w-3.5 mr-1" /> Clear All
+                                    <Button variant="ghost" size="sm" onClick={handleClearAllCourses} className="text-destructive hover:bg-destructive/10 text-xs h-7">
+                                        <Trash2 className="h-3 w-3 mr-1" /> Clear All
                                     </Button>
                                 )}
                             </div>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            {/* Filter input */}
+                        </div>
+
+                        <div className="p-4 border-b border-border/60">
                             <div className="relative">
-                                <Search className="h-4 w-4 absolute left-3 top-3 text-slate-400" />
+                                <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                                 <Input
-                                    placeholder="Search by code or course name..."
+                                    placeholder="Filter by code or course name..."
                                     value={searchQuery}
                                     onChange={e => setSearchQuery(e.target.value)}
-                                    className="pl-9 h-10"
+                                    className="pl-8 h-8 text-xs bg-background"
                                 />
                             </div>
+                        </div>
 
-                            {loading ? (
-                                <div className="p-8 text-center text-slate-500 font-medium">Loading course catalog...</div>
-                            ) : filteredCourses.length === 0 ? (
-                                <div className="p-8 text-center border-2 border-dashed rounded-xl space-y-2">
-                                    <Layers className="h-8 w-8 text-slate-400 mx-auto" />
-                                    <p className="text-sm font-semibold text-slate-600">No courses offered yet for this semester.</p>
-                                    <p className="text-xs text-slate-400">Use the form on the left or bulk import to add offered courses.</p>
-                                </div>
-                            ) : (
-                                <div className="border rounded-xl overflow-hidden">
-                                    <Table>
-                                        <TableHeader className="bg-slate-50">
-                                            <TableRow>
-                                                <TableHead className="w-[120px] font-bold">Code</TableHead>
-                                                <TableHead className="font-bold">Course Title</TableHead>
-                                                <TableHead className="w-[80px] font-bold text-center">Credits</TableHead>
-                                                <TableHead className="w-[70px] text-right font-bold">Action</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {filteredCourses.map((c) => (
-                                                <TableRow key={c.id} className="hover:bg-slate-50/80">
-                                                    <TableCell className="font-mono font-bold text-blue-700">{c.course_code}</TableCell>
-                                                    <TableCell className="font-medium text-slate-900">{c.course_name}</TableCell>
-                                                    <TableCell className="text-center font-semibold text-slate-600">{c.credit}</TableCell>
-                                                    <TableCell className="text-right">
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            onClick={() => handleDeleteCourse(c.id, c.course_code)}
-                                                            className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50"
-                                                        >
-                                                            <Trash2 className="h-4 w-4" />
-                                                        </Button>
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))}
-                                        </TableBody>
-                                    </Table>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
+                        <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader className="bg-muted/30">
+                                    <TableRow className="text-xs">
+                                        <TableHead className="w-[110px] font-semibold">Code</TableHead>
+                                        <TableHead className="font-semibold">Course Title</TableHead>
+                                        <TableHead className="w-[80px] font-semibold text-center">Credits</TableHead>
+                                        <TableHead className="w-[60px] text-right font-semibold">Action</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody className="divide-y divide-border/60">
+                                    {filteredCourses.map((c) => (
+                                        <TableRow key={c.id} className="text-xs hover:bg-muted/30">
+                                            <TableCell className="font-mono font-bold text-primary py-3">{c.course_code}</TableCell>
+                                            <TableCell className="font-medium text-foreground">{c.course_name}</TableCell>
+                                            <TableCell className="text-center font-mono text-muted-foreground">{c.credit}</TableCell>
+                                            <TableCell className="text-right">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={() => handleDeleteCourse(c.id, c.course_code)}
+                                                    className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                                >
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                </Button>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                    {filteredCourses.length === 0 && (
+                                        <TableRow>
+                                            <TableCell colSpan={4} className="text-center py-12 text-muted-foreground italic text-xs">
+                                                {searchQuery ? "No matching courses found." : "No courses cataloged for this semester yet."}
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

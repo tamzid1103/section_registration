@@ -2,14 +2,13 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { UserPlus, Trash2, ChevronLeft, Plus, Upload, Download, Search, RefreshCw, Pencil } from 'lucide-react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
+import { UserPlus, Trash2, ArrowLeft, Plus, Upload, Download, Search, Pencil, Users, Sparkles, Check } from 'lucide-react'
 import { toast } from 'sonner'
 import { getFriendlyErrorMessage } from '@/lib/utils'
 import Link from 'next/link'
@@ -82,7 +81,6 @@ export default function AdminEligibleStudentsPage() {
             return
         }
 
-        // Check duplicates
         const { data: existing } = await supabase
             .from('allowed_students')
             .select('id')
@@ -155,7 +153,6 @@ export default function AdminEligibleStudentsPage() {
         if (error) {
             toast.error(getFriendlyErrorMessage(error.message))
         } else {
-            // Update staff table too if email/name changes
             if (editStudent.email.toLowerCase() !== trimmedEmail) {
                 await supabase.from('authorized_staff')
                     .update({ email: trimmedEmail, name: trimmedName })
@@ -231,7 +228,6 @@ export default function AdminEligibleStudentsPage() {
                 }
 
                 rows = jsonSheet.slice(1).map((row: any) => {
-                    // Normalize cell values to strings
                     const length = Math.max(studentIdIdx + 1, nameIdx + 1, emailIdx + 1, row.length)
                     const normalized = []
                     for (let idx = 0; idx < length; idx++) {
@@ -280,7 +276,6 @@ export default function AdminEligibleStudentsPage() {
                     continue
                 }
 
-                // Check domain
                 if (!validateEmailDomain(rowEmail)) {
                     failed++
                     setUploadCurrent(i + 1)
@@ -288,7 +283,6 @@ export default function AdminEligibleStudentsPage() {
                     continue
                 }
 
-                // Check duplicates (ignore double entries)
                 const { data: existing } = await supabase
                     .from('allowed_students')
                     .select('id')
@@ -309,7 +303,6 @@ export default function AdminEligibleStudentsPage() {
                 })
 
                 if (error) {
-                    console.error('Failed to import row:', error.message)
                     failed++
                 } else {
                     success++
@@ -319,7 +312,7 @@ export default function AdminEligibleStudentsPage() {
                 setUploadProgress(Math.round(((i + 1) / rows.length) * 100))
             }
 
-            toast.success(`Import complete: ${success} added, ${skipped} duplicates skipped, ${failed} failed.`)
+            toast.success(`Import complete: ${success} added, ${skipped} skipped, ${failed} failed.`)
             fetchStudents()
         } catch (err: any) {
             toast.error(`Error importing file: ${getFriendlyErrorMessage(err.message)}`)
@@ -362,215 +355,233 @@ export default function AdminEligibleStudentsPage() {
     }
 
     return (
-        <div className="container mx-auto p-6 space-y-8">
-            <div className="flex items-center gap-4">
-                <Button variant="ghost" size="sm" asChild>
-                    <Link href="/admin"><ChevronLeft className="h-4 w-4 mr-1" /> Back to Dashboard</Link>
-                </Button>
-            </div>
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+            <Link 
+                href="/admin" 
+                className="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors group"
+            >
+                <ArrowLeft className="w-3.5 h-3.5 transition-transform group-hover:-translate-x-0.5" /> Back to Admin Console
+            </Link>
 
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-4xl font-extrabold tracking-tight">Eligible Students</h1>
-                    <p className="text-muted-foreground mt-1">Pre-authorize students so they can self-register using their university email.</p>
+            {/* Header */}
+            <div className="bg-card border border-border/80 rounded-2xl p-5 sm:p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-primary bg-primary/10 px-2.5 py-0.5 rounded-full">
+                        Authorization Access
+                    </span>
+                    <h1 className="text-2xl font-bold tracking-tight text-foreground">Eligible Students Directory</h1>
+                    <p className="text-xs sm:text-sm text-muted-foreground">
+                        Pre-authorize university students for self-service section pre-registration.
+                    </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-xs font-mono bg-muted/30">
+                        {students.length} Authorized
+                    </Badge>
                 </div>
             </div>
 
-            <div className="grid md:grid-cols-3 gap-8">
-                {/* Operations side */}
-                <div className="md:col-span-1 space-y-6">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Manage Access</CardTitle>
-                            <CardDescription>Authorize eligible students</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <Tabs defaultValue="single">
-                                <TabsList className="grid grid-cols-2 gap-1 p-1 bg-slate-100 border border-slate-200/60 rounded-xl h-11 mb-6">
-                                    <TabsTrigger 
-                                        value="single"
-                                        className="rounded-lg font-semibold transition-all data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow text-slate-600 hover:text-slate-800"
-                                    >
-                                        Single Add
-                                    </TabsTrigger>
-                                    <TabsTrigger 
-                                        value="bulk"
-                                        className="rounded-lg font-semibold transition-all data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow text-slate-600 hover:text-slate-800"
-                                    >
-                                        Bulk Import
-                                    </TabsTrigger>
-                                </TabsList>
-
-                                <TabsContent value="single">
-                                    <form onSubmit={handleAddSingle} className="space-y-4">
-                                        <div className="space-y-1.5">
-                                            <label className="text-sm font-semibold">Student ID</label>
-                                            <Input
-                                                placeholder="241-15-101"
-                                                value={studentId}
-                                                onChange={e => setStudentId(e.target.value)}
-                                                required
-                                                disabled={loading}
-                                            />
-                                        </div>
-                                        <div className="space-y-1.5">
-                                            <label className="text-sm font-semibold">Full Name</label>
-                                            <Input
-                                                placeholder="Karim Al-Hasan"
-                                                value={name}
-                                                onChange={e => setName(e.target.value)}
-                                                required
-                                                disabled={loading}
-                                            />
-                                        </div>
-                                        <div className="space-y-1.5">
-                                            <label className="text-sm font-semibold">DIU Email</label>
-                                            <Input
-                                                type="email"
-                                                placeholder="name@diu.edu.bd"
-                                                value={email}
-                                                onChange={e => setEmail(e.target.value)}
-                                                required
-                                                disabled={loading}
-                                            />
-                                        </div>
-                                        <Button type="submit" className="w-full" disabled={loading}>
-                                            <UserPlus className="h-4 w-4 mr-2" /> Authorize Student
-                                        </Button>
-                                    </form>
-                                </TabsContent>
-
-                                <TabsContent value="bulk" className="space-y-4">
-                                    <p className="text-xs text-muted-foreground">Upload a CSV or Excel file containing <strong>student_id</strong>, <strong>name</strong>, and <strong>email</strong> columns.</p>
-                                    <div className="flex gap-2">
-                                        <Button variant="outline" size="sm" onClick={downloadTemplate} className="w-full">
-                                            <Download className="h-3.5 w-3.5 mr-1" /> Template CSV
-                                        </Button>
-                                    </div>
-                                    <div className="border-2 border-dashed rounded-xl p-6 text-center bg-slate-50/50 hover:bg-slate-50 transition-colors relative">
-                                        <Input
-                                            type="file"
-                                            ref={csvRef}
-                                            accept=".csv, .xlsx, .xls"
-                                            onChange={handleCSVImport}
-                                            disabled={uploading}
-                                            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                                        />
-                                        <Upload className="h-8 w-8 mx-auto text-slate-400 mb-2" />
-                                        <p className="text-sm font-medium">Click or drag CSV or Excel sheet here</p>
-                                        <p className="text-xs text-muted-foreground mt-1">Accepts .csv, .xlsx, .xls files</p>
-                                    </div>
-
-                                    {uploading && (
-                                        <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 space-y-2">
-                                            <div className="flex justify-between text-xs font-semibold text-blue-700">
-                                                <span>Importing Students...</span>
-                                                <span>{uploadCurrent}/{uploadTotal} ({uploadProgress}%)</span>
-                                            </div>
-                                            <div className="w-full bg-blue-100 h-2.5 rounded-full overflow-hidden">
-                                                <div className="bg-blue-600 h-full rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
-                                            </div>
-                                        </div>
-                                    )}
-                                </TabsContent>
-                            </Tabs>
-                        </CardContent>
-                    </Card>
-                </div>
-
-                {/* List side */}
-                <div className="md:col-span-2 space-y-6">
-                    <Card>
-                        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 space-y-0">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Authorization form side */}
+                <div className="lg:col-span-1 space-y-6">
+                    <div className="bg-card border border-border/80 rounded-2xl p-5 shadow-xs space-y-4">
+                        <div className="flex items-center gap-2">
+                            <UserPlus className="w-4 h-4 text-primary" />
                             <div>
-                                <CardTitle>Eligible Students List</CardTitle>
-                                <CardDescription>All students permitted to register</CardDescription>
+                                <h3 className="font-semibold text-sm text-foreground">Authorize Students</h3>
+                                <p className="text-xs text-muted-foreground">Single entry or batch upload.</p>
                             </div>
-                            <div className="flex items-center gap-2.5">
-                                <Badge variant="outline" className="px-3 py-1.5 text-xs font-bold bg-blue-50 text-blue-700 border-blue-200">
-                                    Total Authorized: {students.length}
-                                </Badge>
-                                <Button size="sm" variant="outline" onClick={exportCSV} disabled={students.length === 0}>
-                                    <Download className="h-4 w-4 mr-1" /> Export CSV
+                        </div>
+
+                        <Tabs defaultValue="single">
+                            <TabsList className="grid grid-cols-2 bg-muted/40 p-1 rounded-xl h-auto mb-3">
+                                <TabsTrigger value="single" className="text-xs py-1.5 rounded-lg data-[state=active]:bg-card">
+                                    Single Add
+                                </TabsTrigger>
+                                <TabsTrigger value="bulk" className="text-xs py-1.5 rounded-lg data-[state=active]:bg-card">
+                                    Bulk Import
+                                </TabsTrigger>
+                            </TabsList>
+
+                            <TabsContent value="single">
+                                <form onSubmit={handleAddSingle} className="space-y-3">
+                                    <div>
+                                        <label className="text-xs font-medium text-muted-foreground block mb-1">Student ID *</label>
+                                        <Input
+                                            placeholder="241-15-101"
+                                            value={studentId}
+                                            onChange={e => setStudentId(e.target.value)}
+                                            required
+                                            disabled={loading}
+                                            className="h-9 text-xs font-mono"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-medium text-muted-foreground block mb-1">Full Name *</label>
+                                        <Input
+                                            placeholder="Karim Al-Hasan"
+                                            value={name}
+                                            onChange={e => setName(e.target.value)}
+                                            required
+                                            disabled={loading}
+                                            className="h-9 text-xs"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-medium text-muted-foreground block mb-1">DIU Email *</label>
+                                        <Input
+                                            type="email"
+                                            placeholder="student@diu.edu.bd"
+                                            value={email}
+                                            onChange={e => setEmail(e.target.value)}
+                                            required
+                                            disabled={loading}
+                                            className="h-9 text-xs font-mono"
+                                        />
+                                    </div>
+                                    <Button type="submit" size="sm" className="w-full text-xs font-medium h-9" disabled={loading}>
+                                        <UserPlus className="h-3.5 w-3.5 mr-1" /> Authorize Student
+                                    </Button>
+                                </form>
+                            </TabsContent>
+
+                            <TabsContent value="bulk" className="space-y-3">
+                                <p className="text-xs text-muted-foreground">
+                                    Upload CSV or Excel sheet with columns: <code className="font-mono text-[11px] bg-muted px-1 rounded">student_id, name, email</code>
+                                </p>
+                                <Button variant="outline" size="sm" onClick={downloadTemplate} className="w-full text-xs h-8">
+                                    <Download className="h-3 w-3 mr-1" /> Download CSV Template
+                                </Button>
+                                
+                                <div className="border border-dashed border-border/80 rounded-xl p-5 text-center bg-muted/10 hover:bg-muted/20 transition-colors relative">
+                                    <Input
+                                        type="file"
+                                        ref={csvRef}
+                                        accept=".csv, .xlsx, .xls"
+                                        onChange={handleCSVImport}
+                                        disabled={uploading}
+                                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                                    />
+                                    <Upload className="h-6 w-6 mx-auto text-muted-foreground mb-1.5" />
+                                    <p className="text-xs font-medium text-foreground">Click or drop CSV / Excel file here</p>
+                                    <p className="text-[11px] text-muted-foreground mt-0.5">.csv, .xlsx, or .xls</p>
+                                </div>
+
+                                {uploading && (
+                                    <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 space-y-2">
+                                        <div className="flex justify-between text-xs font-medium text-primary">
+                                            <span>Importing rows...</span>
+                                            <span className="font-mono">{uploadCurrent}/{uploadTotal} ({uploadProgress}%)</span>
+                                        </div>
+                                        <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
+                                            <div className="bg-primary h-full transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
+                                        </div>
+                                    </div>
+                                )}
+                            </TabsContent>
+                        </Tabs>
+                    </div>
+                </div>
+
+                {/* Table list side */}
+                <div className="lg:col-span-2 space-y-6">
+                    <div className="bg-card border border-border/80 rounded-2xl shadow-xs overflow-hidden">
+                        <div className="p-4 sm:p-5 border-b border-border/80 bg-muted/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div>
+                                <h3 className="font-semibold text-sm text-foreground">Eligible Student Records</h3>
+                                <p className="text-xs text-muted-foreground">Authorized students list.</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={exportCSV} disabled={students.length === 0}>
+                                    <Download className="h-3.5 w-3.5" /> Export CSV
                                 </Button>
                             </div>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
+                        </div>
+
+                        <div className="p-4 border-b border-border/60">
                             <div className="relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                                 <Input
-                                    placeholder="Search by ID, name, or email..."
+                                    placeholder="Filter by ID, name, or email..."
                                     value={search}
                                     onChange={e => setSearch(e.target.value)}
-                                    className="pl-9"
+                                    className="pl-8 h-8 text-xs bg-background"
                                 />
                             </div>
+                        </div>
 
-                            <div className="border rounded-lg overflow-hidden">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Student ID</TableHead>
-                                            <TableHead>Name</TableHead>
-                                            <TableHead>Email</TableHead>
-                                            <TableHead className="text-right">Actions</TableHead>
+                        <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader className="bg-muted/30">
+                                    <TableRow className="text-xs">
+                                        <TableHead className="font-semibold">Student ID</TableHead>
+                                        <TableHead className="font-semibold">Name</TableHead>
+                                        <TableHead className="font-semibold">Email</TableHead>
+                                        <TableHead className="text-right font-semibold">Actions</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody className="divide-y divide-border/60">
+                                    {filteredStudents.map(s => (
+                                        <TableRow key={s.id} className="text-xs hover:bg-muted/30">
+                                            <TableCell className="font-mono font-medium text-foreground py-3">{s.student_id}</TableCell>
+                                            <TableCell className="font-medium text-foreground">{s.name}</TableCell>
+                                            <TableCell className="font-mono text-muted-foreground">{s.email}</TableCell>
+                                            <TableCell className="text-right">
+                                                <div className="flex justify-end gap-1">
+                                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => openEdit(s)}>
+                                                        <Pencil className="h-3 w-3" />
+                                                    </Button>
+                                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:bg-destructive/10" onClick={() => handleDelete(s.id)}>
+                                                        <Trash2 className="h-3 w-3" />
+                                                    </Button>
+                                                </div>
+                                            </TableCell>
                                         </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {filteredStudents.map(s => (
-                                            <TableRow key={s.id}>
-                                                <TableCell className="font-mono text-sm">{s.student_id}</TableCell>
-                                                <TableCell className="font-medium">{s.name}</TableCell>
-                                                <TableCell className="text-muted-foreground text-sm">{s.email}</TableCell>
-                                                <TableCell className="text-right">
-                                                    <div className="flex justify-end gap-1">
-                                                        <Button size="sm" variant="ghost" onClick={() => openEdit(s)}>
-                                                            <Pencil className="h-4 w-4" />
-                                                        </Button>
-                                                        <Button size="sm" variant="ghost" className="text-destructive" onClick={() => handleDelete(s.id)}>
-                                                            <Trash2 className="h-4 w-4" />
-                                                        </Button>
-                                                    </div>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                        {filteredStudents.length === 0 && (
-                                            <TableRow>
-                                                <TableCell colSpan={4} className="text-center py-8 text-muted-foreground italic">
-                                                    {search ? 'No matches found.' : 'No eligible students loaded yet.'}
-                                                </TableCell>
-                                            </TableRow>
-                                        )}
-                                    </TableBody>
-                                </Table>
-                            </div>
-                        </CardContent>
-                    </Card>
+                                    ))}
+                                    {filteredStudents.length === 0 && (
+                                        <TableRow>
+                                            <TableCell colSpan={4} className="text-center py-12 text-muted-foreground italic text-xs">
+                                                {search ? 'No matching student records found.' : 'No eligible students loaded yet.'}
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    </div>
                 </div>
             </div>
 
             {/* Edit Dialog */}
             <Dialog open={!!editStudent} onOpenChange={v => !v && setEditStudent(null)}>
-                <DialogContent>
+                <DialogContent className="sm:max-w-md">
                     <DialogHeader>
-                        <DialogTitle>Edit Eligible Student</DialogTitle>
+                        <DialogTitle className="text-base font-semibold">Edit Eligible Student</DialogTitle>
+                        <DialogDescription className="text-xs">
+                            Update details for <span className="font-semibold text-foreground">{editStudent?.name}</span>.
+                        </DialogDescription>
                     </DialogHeader>
-                    <form onSubmit={handleEditSave} className="space-y-4">
-                        <div className="space-y-1">
-                            <label className="text-sm font-medium">Student ID</label>
-                            <Input value={editStudentId} onChange={e => setEditStudentId(e.target.value)} required disabled={loading} />
+                    <form onSubmit={handleEditSave} className="space-y-3 py-2">
+                        <div>
+                            <label className="text-xs font-medium text-muted-foreground block mb-1">Student ID</label>
+                            <Input value={editStudentId} onChange={e => setEditStudentId(e.target.value)} className="h-9 text-xs font-mono" required disabled={loading} />
                         </div>
-                        <div className="space-y-1">
-                            <label className="text-sm font-medium">Full Name</label>
-                            <Input value={editName} onChange={e => setEditName(e.target.value)} required disabled={loading} />
+                        <div>
+                            <label className="text-xs font-medium text-muted-foreground block mb-1">Full Name</label>
+                            <Input value={editName} onChange={e => setEditName(e.target.value)} className="h-9 text-xs" required disabled={loading} />
                         </div>
-                        <div className="space-y-1">
-                            <label className="text-sm font-medium">DIU Email</label>
-                            <Input type="email" value={editEmail} onChange={e => setEditEmail(e.target.value)} required disabled={loading} />
+                        <div>
+                            <label className="text-xs font-medium text-muted-foreground block mb-1">DIU Email</label>
+                            <Input type="email" value={editEmail} onChange={e => setEditEmail(e.target.value)} className="h-9 text-xs font-mono" required disabled={loading} />
                         </div>
-                        <DialogFooter className="gap-2">
-                            <Button type="button" variant="outline" onClick={() => setEditStudent(null)} disabled={loading}>Cancel</Button>
-                            <Button type="submit" disabled={loading}>Save Changes</Button>
+                        <DialogFooter className="gap-2 sm:gap-0 pt-2">
+                            <Button type="button" variant="outline" size="sm" className="text-xs" onClick={() => setEditStudent(null)} disabled={loading}>
+                                Cancel
+                            </Button>
+                            <Button type="submit" size="sm" className="text-xs" disabled={loading}>
+                                Save Changes
+                            </Button>
                         </DialogFooter>
                     </form>
                 </DialogContent>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { allowedDomains, developerAllowlist } from "@/lib/auth-constants";
@@ -38,6 +38,8 @@ export default function StudentHub() {
     const [sections, setSections] = useState<any[]>([]);
     const [advisors, setAdvisors] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
+    const searchCacheRef = useRef<Map<string, any[]>>(new Map());
+    const advisorRangesRef = useRef<any[] | null>(null);
     const [userRole, setUserRole] = useState<string | null>(null);
     const [dashboardUrl, setDashboardUrl] = useState("/auth/login");
     const [showScrollTop, setShowScrollTop] = useState(false);
@@ -361,95 +363,121 @@ export default function StudentHub() {
     };
 
     useEffect(() => {
-        const search = async () => {
-            if (query.length < 2) { setResults([]); return; }
-            setLoading(true);
-
-            const [regRes, allowedRes, rangesRes, advisorsRes] = await Promise.all([
-                supabase
-                    .from("registrations")
-                    .select("*, sections!inner(name, id, semesters!inner(is_active)), lab_groups(name), advisors(name, phone, designation)")
-                    .eq("sections.semesters.is_active", true)
-                    .or(`student_id.ilike.%${query}%,student_name.ilike.%${query}%`)
-                    .limit(10),
-                supabase
-                    .from("allowed_students")
-                    .select("*")
-                    .or(`student_id.ilike.%${query}%,name.ilike.%${query}%`)
-                    .limit(10),
-                supabase
-                    .from("student_advisor_ranges")
-                    .select("advisor_id, start_id_numeric, end_id_numeric"),
-                supabase
-                    .from("advisors")
-                    .select("id, name, phone, designation")
-            ]);
-
-            const regData = regRes.data || [];
-            const allowedData = allowedRes.data || [];
-            const rangesData = rangesRes.data || [];
-            const advisorsData = advisorsRes.data || [];
-
-            const resolveAdvisorForStudent = (stdId: string) => {
-                if (!stdId || rangesData.length === 0 || advisorsData.length === 0) return null;
-                const numId = parseInt(stdId.replace(/-/g, ''), 10);
-                if (isNaN(numId)) return null;
-                const rangeMatch = rangesData.find(r => numId >= Number(r.start_id_numeric) && numId <= Number(r.end_id_numeric));
-                if (!rangeMatch) return null;
-                return advisorsData.find(a => a.id === rangeMatch.advisor_id) || null;
-            };
-
-            const combinedResults: any[] = [];
-            const processedStudentIds = new Set<string>();
-
-            if (allowedData.length > 0) {
-                for (const student of allowedData) {
-                    const normId = student.student_id.trim().toLowerCase();
-                    processedStudentIds.add(normId);
-
-                    const matchReg = regData.find(
-                        r => r.student_id.trim().toLowerCase() === normId
-                    );
-
-                    if (matchReg) {
-                        combinedResults.push(matchReg);
-                    } else {
-                        combinedResults.push({
-                            id: `unreg-${student.id}`,
-                            student_id: student.student_id,
-                            student_name: student.name,
-                            email: student.email,
-                            sections: null,
-                            lab_groups: null,
-                            advisors: null,
-                            advisor_completed: false,
-                            isUnregistered: true
-                        });
-                    }
-                }
-            }
-
-            if (regData.length > 0) {
-                for (const reg of regData) {
-                    const normId = reg.student_id.trim().toLowerCase();
-                    if (!processedStudentIds.has(normId)) {
-                        processedStudentIds.add(normId);
-                        combinedResults.push(reg);
-                    }
-                }
-            }
-
-            const finalResults = combinedResults.map(item => ({
-                ...item,
-                advisors: item.advisors || resolveAdvisorForStudent(item.student_id)
-            }));
-
-            setResults(finalResults);
+        const trimmed = query.trim();
+        if (trimmed.length < 2) { 
+            setResults([]); 
             setLoading(false);
+            return; 
+        }
+
+        const cacheKey = trimmed.toLowerCase();
+        if (searchCacheRef.current.has(cacheKey)) {
+            setResults(searchCacheRef.current.get(cacheKey) || []);
+            setLoading(false);
+            return;
+        }
+
+        setLoading(true);
+
+        const search = async () => {
+            try {
+                // Ensure ranges are cached once
+                if (!advisorRangesRef.current) {
+                    const { data: ranges } = await supabase
+                        .from("student_advisor_ranges")
+                        .select("advisor_id, start_id_numeric, end_id_numeric");
+                    advisorRangesRef.current = ranges || [];
+                }
+                const rangesData = advisorRangesRef.current || [];
+
+                // Fast parallel queries for active registrations and student roster
+                const [regRes, allowedRes] = await Promise.all([
+                    supabase
+                        .from("registrations")
+                        .select("*, sections!inner(name, id, semesters!inner(is_active)), lab_groups(name), advisors(name, phone, designation)")
+                        .eq("sections.semesters.is_active", true)
+                        .or(`student_id.ilike.%${trimmed}%,student_name.ilike.%${trimmed}%`)
+                        .limit(10),
+                    supabase
+                        .from("allowed_students")
+                        .select("*")
+                        .or(`student_id.ilike.%${trimmed}%,name.ilike.%${trimmed}%`)
+                        .limit(10),
+                ]);
+
+                const regData = regRes.data || [];
+                const allowedData = allowedRes.data || [];
+
+                const resolveAdvisorForStudent = (stdId: string) => {
+                    if (!stdId || rangesData.length === 0 || advisors.length === 0) return null;
+                    const numId = parseInt(stdId.replace(/-/g, ''), 10);
+                    if (isNaN(numId)) return null;
+                    const rangeMatch = rangesData.find(r => numId >= Number(r.start_id_numeric) && numId <= Number(r.end_id_numeric));
+                    if (!rangeMatch) return null;
+                    return advisors.find(a => a.id === rangeMatch.advisor_id) || null;
+                };
+
+                const combinedResults: any[] = [];
+                const processedStudentIds = new Set<string>();
+
+                if (allowedData.length > 0) {
+                    for (const student of allowedData) {
+                        const normId = student.student_id.trim().toLowerCase();
+                        processedStudentIds.add(normId);
+
+                        const matchReg = regData.find(
+                            r => r.student_id.trim().toLowerCase() === normId
+                        );
+
+                        if (matchReg) {
+                            combinedResults.push(matchReg);
+                        } else {
+                            combinedResults.push({
+                                id: `unreg-${student.id}`,
+                                student_id: student.student_id,
+                                student_name: student.name,
+                                email: student.email,
+                                sections: null,
+                                lab_groups: null,
+                                advisors: null,
+                                advisor_completed: false,
+                                isUnregistered: true
+                            });
+                        }
+                    }
+                }
+
+                if (regData.length > 0) {
+                    for (const reg of regData) {
+                        const normId = reg.student_id.trim().toLowerCase();
+                        if (!processedStudentIds.has(normId)) {
+                            processedStudentIds.add(normId);
+                            combinedResults.push(reg);
+                        }
+                    }
+                }
+
+                const finalResults = combinedResults.map(item => ({
+                    ...item,
+                    advisors: item.advisors || resolveAdvisorForStudent(item.student_id)
+                }));
+
+                // Keep cache bounded to prevent memory build-up
+                if (searchCacheRef.current.size > 40) {
+                    const firstKey = searchCacheRef.current.keys().next().value;
+                    if (firstKey) searchCacheRef.current.delete(firstKey);
+                }
+                searchCacheRef.current.set(cacheKey, finalResults);
+
+                setResults(finalResults);
+            } finally {
+                setLoading(false);
+            }
         };
-        const t = setTimeout(search, 250);
+
+        const t = setTimeout(search, 140);
         return () => clearTimeout(t);
-    }, [query]);
+    }, [query, advisors]);
 
     useEffect(() => {
         const handleScroll = () => {
@@ -566,79 +594,83 @@ export default function StudentHub() {
     const renderResults = () => {
         if (!hasQuery) {
             return (
-                <div className="bg-blue-50/50 p-6 rounded-2xl border border-blue-100 text-center">
-                    <p className="text-blue-600/60 text-sm italic">Enter your ID or name to check section, lab group &amp; advisor.</p>
+                <div className="p-5 rounded-xl border border-dashed border-border bg-muted/20 text-center">
+                    <p className="text-muted-foreground text-xs">Enter your Student ID or full name to view section, lab &amp; advisor details.</p>
                 </div>
             );
         }
 
         return (
-            <div className="space-y-4">
+            <div className="space-y-3">
                 {results.length > 0 ? results.map(reg => (
-                    <Card key={reg.id} className={`bg-white shadow-lg border-l-4 ${reg.isUnregistered ? "border-l-amber-400" : reg.advisor_completed ? "border-l-green-500" : "border-l-blue-600"}`}>
-                        <CardContent className="p-5 space-y-3">
-                            {reg.advisor_completed && (
-                                <div className="flex items-center gap-2 text-green-600 text-xs font-bold bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-                                    <CheckCircle2 className="w-4 h-4" /> Advisor Pre-Registration Completed
-                                </div>
-                            )}
-                            {reg.isUnregistered && (
-                                <div className="flex items-center gap-2 text-amber-700 text-xs font-semibold bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                                    <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" /> Section choice pending for active semester
-                                </div>
-                            )}
-                            <div>
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Student</p>
-                                <p className="text-lg font-bold text-slate-900">{reg.student_name}</p>
-                                <p className="text-sm font-mono text-slate-500">{reg.student_id}</p>
+                    <div
+                        key={reg.id}
+                        className={`p-4 rounded-xl border bg-card shadow-2xs space-y-3 transition-all ${
+                            reg.isUnregistered
+                                ? "border-amber-300 dark:border-amber-800"
+                                : reg.advisor_completed
+                                    ? "border-emerald-300 dark:border-emerald-800"
+                                    : "border-border"
+                        }`}
+                    >
+                        {reg.advisor_completed && (
+                            <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300 text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-lg px-2.5 py-1.5">
+                                <CheckCircle2 className="w-3.5 h-3.5" /> Advisor Pre-Registration Verified
                             </div>
-                            <div className="border-t pt-3 space-y-2">
-                                <div className="flex items-center gap-2">
-                                    <BookOpen className="w-4 h-4 text-blue-500" />
-                                    <div>
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase">Section</p>
-                                        <p className="text-sm font-bold">
-                                            {reg.sections?.id ? (
-                                                <Link href={`/sections/${reg.sections?.id}`} className="text-blue-600 hover:underline">
-                                                    Section {reg.sections?.name}
-                                                </Link>
-                                            ) : (
-                                                <span className="inline-flex items-center gap-1 text-amber-600 font-bold bg-amber-100/70 border border-amber-200 px-2 py-0.5 rounded text-xs">
-                                                    Sec not selected
-                                                </span>
-                                            )}
-                                        </p>
-                                    </div>
-                                </div>
-                                {reg.lab_groups?.name && (
-                                    <div className="flex items-center gap-2">
-                                        <Users className="w-4 h-4 text-blue-500" />
-                                        <div>
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase">Lab Group</p>
-                                            <p className="text-sm font-bold">{reg.lab_groups.name}</p>
-                                        </div>
-                                    </div>
+                        )}
+                        {reg.isUnregistered && (
+                            <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-300 text-xs font-semibold bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-lg px-2.5 py-1.5">
+                                <AlertCircle className="w-3.5 h-3.5 shrink-0" /> Section choice pending
+                            </div>
+                        )}
+
+                        <div>
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Student</p>
+                            <p className="text-sm font-bold text-foreground">{reg.student_name}</p>
+                            <p className="text-xs font-mono text-muted-foreground">{reg.student_id}</p>
+                        </div>
+
+                        <div className="border-t border-border/60 pt-2.5 space-y-2 text-xs">
+                            <div className="flex items-center justify-between">
+                                <span className="text-muted-foreground flex items-center gap-1.5">
+                                    <BookOpen className="w-3.5 h-3.5 text-primary" /> Section:
+                                </span>
+                                {reg.sections?.id ? (
+                                    <Link href={`/sections/${reg.sections?.id}`} className="font-semibold text-primary hover:underline">
+                                        Section {reg.sections?.name}
+                                    </Link>
+                                ) : (
+                                    <span className="text-amber-600 font-medium">Not Selected</span>
                                 )}
-                                <div className="flex items-center gap-2">
-                                    <GraduationCap className="w-4 h-4 text-blue-500" />
-                                    <div>
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase">Advisor</p>
-                                        <p className="text-sm font-bold">{reg.advisors?.name || "Not assigned yet"}</p>
-                                        {reg.advisors?.phone && <p className="text-xs text-slate-400">📞 {reg.advisors.phone}</p>}
-                                    </div>
-                                </div>
                             </div>
-                            {reg.advisor_note && (
-                                <div className="mt-4 bg-amber-50 border border-amber-200 rounded-lg p-3 shadow-sm">
-                                    <p className="text-[10px] font-bold text-amber-600 uppercase mb-1">Note from Advisor</p>
-                                    <p className="text-sm text-slate-700 font-medium">"{reg.advisor_note}"</p>
+
+                            {reg.lab_groups?.name && (
+                                <div className="flex items-center justify-between">
+                                    <span className="text-muted-foreground flex items-center gap-1.5">
+                                        <Users className="w-3.5 h-3.5 text-primary" /> Lab:
+                                    </span>
+                                    <span className="font-semibold text-foreground">Lab {reg.lab_groups.name}</span>
                                 </div>
                             )}
-                        </CardContent>
-                    </Card>
+
+                            <div className="flex items-center justify-between">
+                                <span className="text-muted-foreground flex items-center gap-1.5">
+                                    <GraduationCap className="w-3.5 h-3.5 text-primary" /> Advisor:
+                                </span>
+                                <span className="font-semibold text-foreground">{reg.advisors?.name || "Not assigned"}</span>
+                            </div>
+                        </div>
+
+                        {reg.advisor_note && (
+                            <div className="p-2.5 rounded-lg bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-900/40 text-xs">
+                                <p className="text-[10px] font-bold uppercase text-amber-800 dark:text-amber-300">Note from Advisor</p>
+                                <p className="text-foreground italic mt-0.5">"{reg.advisor_note}"</p>
+                            </div>
+                        )}
+                    </div>
                 )) : (
-                    <div className="bg-white p-8 rounded-2xl border-2 border-dashed text-center">
-                        <p className="text-slate-400 text-sm">No record found for &quot;{query}&quot;</p>
+                    <div className="p-6 rounded-xl border border-dashed border-border bg-muted/20 text-center">
+                        <p className="text-muted-foreground text-xs">No records found matching &quot;{query}&quot;</p>
                     </div>
                 )}
             </div>
@@ -646,369 +678,380 @@ export default function StudentHub() {
     };
 
     return (
-        <div className="min-h-screen bg-background text-foreground transition-colors duration-200">
-            {/* Header */}
-            <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 dark:from-slate-900 dark:via-slate-900 dark:to-slate-950 diu:from-[#0B2545] diu:via-[#07162C] diu:to-[#051224] text-white pt-16 pb-24 px-6 text-center relative border-b border-blue-500/20 dark:border-slate-800 diu:border-emerald-500/30">
-                {/* Small screens: stacked clock above title */}
-                <div className="sm:hidden mb-4">
-                    <div className="mx-auto inline-block rounded-xl border border-white/25 bg-white/10 px-4 py-2 text-left shadow-md backdrop-blur-sm">
-                        <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-blue-100 diu:text-amber-200">
-                            <Timer className="h-3.5 w-3.5" />
-                            {timerDisplay.title}
+        <div className="min-h-screen bg-background text-foreground transition-colors duration-150">
+            {/* Academic Navigation & Hero Header */}
+            <div className="border-b-2 border-border bg-card/95 backdrop-blur shadow-xs relative">
+                {/* University Branded Color Ribbon */}
+                <div className="h-1.5 w-full bg-gradient-to-r from-[#0F766E] via-[#059669] to-[#D97706] diu:from-[#0B3B60] diu:via-[#008751] diu:to-[#D97706]" />
+
+                <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+                    {/* Top Row: Brand, Clock, & Global Actions */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="flex items-center gap-3.5">
+                            <div className="w-11 h-11 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center font-black text-sm tracking-wider shadow-xs ring-2 ring-primary/25 shrink-0">
+                                DIU
+                            </div>
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <h1 className="text-xl sm:text-2xl font-black tracking-tight text-foreground">Section Pre-Registration</h1>
+                                    <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-primary/10 text-primary border border-primary/25">
+                                        Academic Portal
+                                    </span>
+                                </div>
+                                <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5 mt-0.5">
+                                    <GraduationCap className="w-3.5 h-3.5 text-primary shrink-0" /> Department of Computer Science &amp; Engineering · Daffodil International University
+                                </p>
+                            </div>
                         </div>
-                        <p className="mt-1 font-mono text-sm font-bold text-white">{mounted ? timerDisplay.value : '—:—:—'}</p>
-                        <div className="mt-1 flex items-center gap-2 text-[11px] text-blue-100 diu:text-slate-300">
-                            <Clock3 className="h-3.5 w-3.5" />
-                            <span>{mounted ? timerDisplay.subtitle : ''}</span>
-                            <span className="rounded border border-white/30 px-1.5 py-0.5 text-[10px]">{timerDisplay.chip}</span>
-                        </div>
-                    </div>
-                </div>
 
-                {/* Larger screens: floating clock to the left */}
-                <div className="hidden sm:block absolute top-4 left-6 rounded-xl border border-white/25 bg-white/15 px-4 py-2 text-left shadow-md backdrop-blur-sm">
-                    <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-blue-100 diu:text-amber-200">
-                        <Timer className="h-3.5 w-3.5" />
-                        {timerDisplay.title}
-                    </div>
-                    <p className="mt-1 font-mono text-sm font-bold text-white sm:text-base">{mounted ? timerDisplay.value : '—:—:—'}</p>
-                    <div className="mt-1 flex items-center gap-2 text-[11px] text-blue-100 diu:text-slate-300">
-                        <Clock3 className="h-3.5 w-3.5" />
-                        <span>{mounted ? timerDisplay.subtitle : ''}</span>
-                        <span className="rounded border border-white/30 px-1.5 py-0.5 text-[10px]">{timerDisplay.chip}</span>
-                    </div>
-                </div>
+                        <div className="flex items-center gap-2.5 flex-wrap">
+                            {/* Live Timer Pill */}
+                            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border-2 border-border bg-muted/40 text-xs text-muted-foreground shadow-2xs">
+                                <Clock3 className="w-3.5 h-3.5 text-primary shrink-0" />
+                                <span className="font-mono font-bold text-foreground">{mounted ? timerDisplay.value : '—:—:—'}</span>
+                                <span className="text-[10px] uppercase font-black tracking-wider px-1.5 py-0.2 rounded bg-background border border-border text-foreground">{timerDisplay.chip}</span>
+                            </div>
 
-                <h1 className="text-4xl font-extrabold tracking-tight mb-3">DIU Section Pre-Registration</h1>
-                <p className="max-w-xl mx-auto text-blue-100 diu:text-slate-200 opacity-90">Check real-time section availability and your registration status.</p>
+                            <ThemeToggle variant="pills" />
 
-                <div className="absolute top-4 right-6 flex items-center gap-2.5">
-                    <ThemeToggle variant="pills" />
-                    {userRole ? (
-                        <Link href={dashboardUrl}
-                            className="flex items-center gap-1.5 bg-white text-blue-700 diu:bg-emerald-600 diu:text-white font-semibold text-sm rounded-lg px-3 py-1.5 hover:bg-blue-50 diu:hover:bg-emerald-500 transition-colors shadow-sm">
-                            <LayoutDashboard className="w-4 h-4" /> Dashboard
-                        </Link>
-                    ) : (
-                        <Dialog open={authOpen} onOpenChange={setAuthOpen}>
-                            <DialogTrigger asChild>
-                                <button
-                                    type="button"
-                                    onClick={() => setAuthMode("login")}
-                                    className="flex items-center gap-1.5 text-blue-100 hover:text-white text-sm border border-blue-300 hover:border-white diu:border-emerald-400/40 rounded-lg px-3 py-1.5 transition-colors"
+                            {userRole ? (
+                                <Link
+                                    href={dashboardUrl}
+                                    className="inline-flex items-center gap-1.5 bg-primary text-primary-foreground font-bold text-xs rounded-xl px-4 py-2 hover:bg-primary/90 transition-all shadow-xs"
                                 >
-                                    <LogIn className="w-4 h-4" /> Student / Staff Login
-                                </button>
-                            </DialogTrigger>
-                            <DialogContent className="w-[calc(100%-1.5rem)] sm:max-w-lg md:max-w-xl lg:max-w-2xl max-h-[85dvh] sm:max-h-[85vh] overflow-y-auto overscroll-contain touch-pan-y rounded-2xl p-4 sm:p-6 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95 data-[state=open]:slide-in-from-top-8 data-[state=closed]:slide-out-to-top-6">
-                                <DialogHeader>
-                                    <div className="mx-auto mb-3 w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center">
-                                        <GraduationCap className="w-7 h-7 text-white" />
-                                    </div>
-                                    <DialogTitle className="text-center text-2xl font-bold tracking-tight">
-                                        {authMode === "login" ? "Portal Login" : "Create Account"}
-                                    </DialogTitle>
-                                    <DialogDescription className="text-center">
-                                        {authMode === "login"
-                                            ? "Login with your email or Student ID"
-                                            : "Register as Student, CR or Advisor"}
-                                    </DialogDescription>
-                                </DialogHeader>
-
-                                <form className="space-y-4" onSubmit={handleAuthSubmit}>
-                                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex gap-3 text-blue-800 text-sm">
-                                        <InfoIcon className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                                        <p>
-                                            {authMode === "login"
-                                                ? "Students can log in with their Student ID or university email."
-                                                : "Students must be pre-authorized by an Admin to register."
-                                            }
-                                        </p>
-                                    </div>
-
-                                    {authMode === "register" && (
-                                        <div className="grid grid-cols-3 gap-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => setRegisterRole("cr")}
-                                                className={`flex flex-col items-center gap-1 p-2 rounded-xl border-2 text-xs font-semibold transition-all ${registerRole === "cr"
-                                                    ? "border-blue-600 bg-blue-50 text-blue-700 shadow-sm"
-                                                    : "border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50"
-                                                    }`}
-                                            >
-                                                <Shield className="w-4 h-4" />
-                                                CR Apply
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setRegisterRole("student")}
-                                                className={`flex flex-col items-center gap-1 p-2 rounded-xl border-2 text-xs font-semibold transition-all ${registerRole === "student"
-                                                    ? "border-blue-600 bg-blue-50 text-blue-700 shadow-sm"
-                                                    : "border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50"
-                                                    }`}
-                                            >
-                                                <GraduationCap className="w-4 h-4" />
-                                                Student
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setRegisterRole("advisor")}
-                                                className={`flex flex-col items-center gap-1 p-2 rounded-xl border-2 text-xs font-semibold transition-all ${registerRole === "advisor"
-                                                    ? "border-blue-600 bg-blue-50 text-blue-700 shadow-sm"
-                                                    : "border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50"
-                                                    }`}
-                                            >
-                                                <User className="w-4 h-4" />
-                                                Advisor
-                                            </button>
-                                        </div>
-                                    )}
-
-                                    {authMode === "register" && (
-                                        <div className={`text-xs rounded-lg p-3 border ${registerRole === "cr"
-                                            ? "bg-amber-50 border-amber-200 text-amber-800"
-                                            : registerRole === "student"
-                                                ? "bg-blue-50 border-blue-200 text-blue-800"
-                                                : "bg-green-50 border-green-200 text-green-800"
-                                            }`}>
-                                            {registerRole === "cr"
-                                                ? "CR applications require admin approval before access is granted."
-                                                : registerRole === "student"
-                                                    ? "Student accounts are auto-approved if pre-authorized by an admin. An activation link will be sent."
-                                                    : "Advisor accounts are auto-approved if your email is registered in the system."}
-                                        </div>
-                                    )}
-
-                                    {authMode === "register" && (
-                                        <div className="space-y-1.5">
-                                            <label className="text-sm font-medium">Full Name</label>
-                                            <Input
-                                                placeholder="Your full name"
-                                                value={authFullName}
-                                                onChange={(e) => setAuthFullName(e.target.value)}
-                                            />
-                                        </div>
-                                    )}
-
-                                    <div className="space-y-1.5">
-                                        <label className="text-sm font-medium">
-                                            {authMode === "register" ? "Email" : "Email or Student ID"}
-                                        </label>
-                                        <Input
-                                            type="text"
-                                            placeholder={authMode === "register" ? "name@diu.edu.bd" : "Enter email or student ID"}
-                                            value={authEmail}
-                                            onChange={(e) => setAuthEmail(e.target.value)}
-                                        />
-                                    </div>
-
-                                    <div className="space-y-1.5">
-                                        <label className="text-sm font-medium">Password</label>
-                                        <div className="relative">
-                                            <Input
-                                                type={showPassword ? "text" : "password"}
-                                                placeholder="Enter your password"
-                                                value={authPassword}
-                                                onChange={(e) => setAuthPassword(e.target.value)}
-                                                className="pr-10"
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={() => setShowPassword(!showPassword)}
-                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700"
-                                            >
-                                                {showPassword ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    {authMode === "register" && (
-                                        <div className="space-y-1.5">
-                                            <label className="text-sm font-medium">Confirm Password</label>
-                                            <div className="relative">
-                                                <Input
-                                                    type={showConfirmPassword ? "text" : "password"}
-                                                    placeholder="Confirm your password"
-                                                    value={authConfirmPassword}
-                                                    onChange={(e) => setAuthConfirmPassword(e.target.value)}
-                                                    className="pr-10"
-                                                />
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700"
-                                                >
-                                                    {showConfirmPassword ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}
-                                                </button>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {authMode === "register" && (registerRole === "cr" || registerRole === "student") && (
-                                        <div className="space-y-1.5">
-                                            <label className="text-sm font-medium">Your Student ID</label>
-                                            <Input
-                                                placeholder="241-15-877"
-                                                value={authStudentId}
-                                                onChange={(e) => setAuthStudentId(e.target.value)}
-                                            />
-                                        </div>
-                                    )}
-
-                                    {authMode === "register" && registerRole === "cr" && (
-                                        <div className="space-y-1.5">
-                                            <label className="text-sm font-medium">Section You Want to Manage</label>
-                                            <Input
-                                                placeholder="e.g. 66_A"
-                                                value={authSectionInterested}
-                                                onChange={(e) => setAuthSectionInterested(e.target.value)}
-                                            />
-                                        </div>
-                                    )}
-
-                                    {authError && (
-                                        <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                                            <p className="text-sm text-red-700 font-medium">{authError}</p>
-                                        </div>
-                                    )}
-
-                                    <Button className="w-full h-11 gap-2 text-base" type="submit" disabled={authLoading}>
-                                        {authLoading
-                                            ? "Processing..."
-                                            : authMode === "login"
-                                                ? <><KeyRound className="w-4 h-4" /> Login</>
-                                                : <><User className="w-4 h-4" /> Create Account</>
-                                        }
-                                    </Button>
-
-                                    {authMode === "login" && (
-                                        <Link
-                                            href="/auth/forgot-password"
-                                            className="block text-center text-sm font-medium text-blue-700 hover:text-blue-800 hover:underline"
+                                    <LayoutDashboard className="w-3.5 h-3.5" /> Portal Dashboard
+                                </Link>
+                            ) : (
+                                <Dialog open={authOpen} onOpenChange={setAuthOpen}>
+                                    <DialogTrigger asChild>
+                                        <button
+                                            type="button"
+                                            onClick={() => setAuthMode("login")}
+                                            className="inline-flex items-center gap-1.5 text-foreground hover:text-primary text-xs font-bold border-2 border-border bg-card hover:bg-muted rounded-xl px-4 py-2 transition-all shadow-xs"
                                         >
-                                            Forgot your password?
-                                        </Link>
-                                    )}
+                                            <LogIn className="w-3.5 h-3.5" /> Portal Login
+                                        </button>
+                                    </DialogTrigger>
+                                    <DialogContent className="w-[calc(100%-1.5rem)] sm:max-w-md rounded-2xl p-6 border-border shadow-md">
+                                        <DialogHeader>
+                                            <div className="mx-auto mb-2 w-10 h-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center">
+                                                <GraduationCap className="w-5 h-5" />
+                                            </div>
+                                            <DialogTitle className="text-center text-xl font-bold tracking-tight text-foreground">
+                                                {authMode === "login" ? "Portal Access" : "Create Account"}
+                                            </DialogTitle>
+                                            <DialogDescription className="text-center text-xs text-muted-foreground">
+                                                {authMode === "login"
+                                                    ? "Enter your DIU student ID or email to access your dashboard"
+                                                    : "Register as Student, CR or Faculty Advisor"}
+                                            </DialogDescription>
+                                        </DialogHeader>
 
-                                    <button
-                                        type="button"
-                                        className="w-full rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 transition-all hover:border-blue-300 hover:bg-blue-100"
-                                        onClick={toggleAuthMode}
-                                    >
-                                        {authMode === "login"
-                                            ? "Don't have an account? Register here"
-                                            : "Already have an account? Login"}
-                                    </button>
-                                </form>
-                            </DialogContent>
-                        </Dialog>
-                    )}
-                    <a href="#advisors"
-                        className="flex items-center gap-1.5 text-blue-100 hover:text-white text-sm border border-blue-300 hover:border-white rounded-lg px-3 py-1.5 transition-colors">
-                        <GraduationCap className="w-4 h-4" /> Advisors
-                    </a>
+                                        <form className="space-y-3.5 pt-2" onSubmit={handleAuthSubmit}>
+                                            <div className="p-3 rounded-lg border border-border bg-muted/40 text-xs text-muted-foreground flex items-start gap-2">
+                                                <InfoIcon className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                                                <p>
+                                                    {authMode === "login"
+                                                        ? "Use your official @diu.edu.bd email or Student ID to login."
+                                                        : "Students must be pre-authorized in the semester roster."}
+                                                </p>
+                                            </div>
+
+                                            {authMode === "register" && (
+                                                <div className="grid grid-cols-3 gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setRegisterRole("cr")}
+                                                        className={`flex flex-col items-center gap-1 p-2 rounded-lg border text-xs font-medium transition-all ${
+                                                            registerRole === "cr"
+                                                                ? "border-primary bg-primary/10 text-primary font-semibold"
+                                                                : "border-border text-muted-foreground hover:text-foreground"
+                                                        }`}
+                                                    >
+                                                        <Shield className="w-4 h-4" /> CR
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setRegisterRole("student")}
+                                                        className={`flex flex-col items-center gap-1 p-2 rounded-lg border text-xs font-medium transition-all ${
+                                                            registerRole === "student"
+                                                                ? "border-primary bg-primary/10 text-primary font-semibold"
+                                                                : "border-border text-muted-foreground hover:text-foreground"
+                                                        }`}
+                                                    >
+                                                        <GraduationCap className="w-4 h-4" /> Student
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setRegisterRole("advisor")}
+                                                        className={`flex flex-col items-center gap-1 p-2 rounded-lg border text-xs font-medium transition-all ${
+                                                            registerRole === "advisor"
+                                                                ? "border-primary bg-primary/10 text-primary font-semibold"
+                                                                : "border-border text-muted-foreground hover:text-foreground"
+                                                        }`}
+                                                    >
+                                                        <User className="w-4 h-4" /> Advisor
+                                                    </button>
+                                                </div>
+                                            )}
+
+                                            {authMode === "register" && (
+                                                <div className="space-y-1">
+                                                    <label className="text-xs font-medium text-foreground">Full Name</label>
+                                                    <Input
+                                                        placeholder="Your full name"
+                                                        value={authFullName}
+                                                        onChange={(e) => setAuthFullName(e.target.value)}
+                                                        className="h-9 text-xs"
+                                                    />
+                                                </div>
+                                            )}
+
+                                            <div className="space-y-1">
+                                                <label className="text-xs font-medium text-foreground">
+                                                    {authMode === "register" ? "University Email" : "Email or Student ID"}
+                                                </label>
+                                                <Input
+                                                    type="text"
+                                                    placeholder={authMode === "register" ? "name@diu.edu.bd" : "Enter ID or email"}
+                                                    value={authEmail}
+                                                    onChange={(e) => setAuthEmail(e.target.value)}
+                                                    className="h-9 text-xs"
+                                                />
+                                            </div>
+
+                                            <div className="space-y-1">
+                                                <label className="text-xs font-medium text-foreground">Password</label>
+                                                <div className="relative">
+                                                    <Input
+                                                        type={showPassword ? "text" : "password"}
+                                                        placeholder="Enter your password"
+                                                        value={authPassword}
+                                                        onChange={(e) => setAuthPassword(e.target.value)}
+                                                        className="h-9 text-xs pr-9"
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowPassword(!showPassword)}
+                                                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                                    >
+                                                        {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {authMode === "register" && (
+                                                <div className="space-y-1">
+                                                    <label className="text-xs font-medium text-foreground">Confirm Password</label>
+                                                    <div className="relative">
+                                                        <Input
+                                                            type={showConfirmPassword ? "text" : "password"}
+                                                            placeholder="Re-enter password"
+                                                            value={authConfirmPassword}
+                                                            onChange={(e) => setAuthConfirmPassword(e.target.value)}
+                                                            className="h-9 text-xs pr-9"
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                                        >
+                                                            {showConfirmPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {authError && (
+                                                <div className="p-2.5 rounded-lg bg-destructive/10 border border-destructive/20 text-xs text-destructive">
+                                                    {authError}
+                                                </div>
+                                            )}
+
+                                            <Button className="w-full h-10 text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 mt-2" type="submit" disabled={authLoading}>
+                                                {authLoading
+                                                    ? "Processing..."
+                                                    : authMode === "login"
+                                                        ? <><KeyRound className="w-3.5 h-3.5 mr-1.5" /> Sign In</>
+                                                        : <><User className="w-3.5 h-3.5 mr-1.5" /> Create Account</>
+                                                }
+                                            </Button>
+
+                                            <button
+                                                type="button"
+                                                className="w-full text-center text-xs text-muted-foreground hover:text-foreground pt-1"
+                                                onClick={toggleAuthMode}
+                                            >
+                                                {authMode === "login"
+                                                    ? "Don't have an account? Register here"
+                                                    : "Already have an account? Sign in"}
+                                            </button>
+                                        </form>
+                                    </DialogContent>
+                                </Dialog>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Masthead Banner info */}
+                    <div className="pt-4 border-t border-border/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                        <div className="flex items-center gap-2 text-muted-foreground flex-wrap">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-md font-extrabold text-[11px] bg-primary/10 text-primary border border-primary/25">
+                                Live Pre-Registration
+                            </span>
+                            <span className="hidden sm:inline text-muted-foreground/60">·</span>
+                            <span className="text-xs font-semibold text-foreground">
+                                Real-time cohort capacity, lab choices &amp; assigned faculty advising.
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-3 text-xs font-bold text-muted-foreground shrink-0">
+                            <span className="flex items-center gap-1.5 text-foreground">
+                                <Users className="w-3.5 h-3.5 text-primary" /> Active Cohorts: <span className="text-primary font-black">{sections.length}</span>
+                            </span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <div className="max-w-6xl mx-auto px-6 -mt-12 space-y-10 pb-20">
-                {/* Search */}
+            {/* Main Content Area */}
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-8">
+                {/* Search Bar - High contrast Spotlight Input */}
                 <div className="relative max-w-2xl mx-auto">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
                     <Input
-                        className="h-14 pl-12 text-lg bg-white shadow-xl border-none rounded-2xl focus-visible:ring-2 focus-visible:ring-blue-500"
-                        placeholder="Search your Student ID or Name..."
-                        value={query} onChange={e => setQuery(e.target.value)}
+                        className="h-12 pl-11 pr-10 text-sm bg-card shadow-xs border-2 border-border rounded-xl focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:border-primary transition-all font-medium text-foreground"
+                        placeholder="Search by Student ID (e.g. 211-15-1234) or Name..."
+                        value={query}
+                        onChange={e => setQuery(e.target.value)}
                     />
-                    {loading && <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 animate-spin text-blue-600 w-5 h-5" />}
+                    {loading && <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 animate-spin text-primary w-4 h-4" />}
                 </div>
 
                 {/* Mobile Results */}
-                <div className="lg:hidden space-y-4">
-                    <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                        <BookOpen className="w-5 h-5 text-blue-600" /> Your Info
+                <div className="lg:hidden space-y-3">
+                    <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                        <BookOpen className="w-4 h-4 text-primary" /> Search Results
                     </h2>
                     {renderResults()}
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                    {/* Sections */}
-                    <div className="lg:col-span-8 space-y-4">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                            <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                                <Users className="w-5 h-5 text-blue-600" /> Live Section Status
-                                <span className="text-sm font-normal text-slate-400 hidden sm:inline">(click to view students)</span>
-                            </h2>
-                            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 w-fit px-3 py-1">
-                                <span className="font-bold mr-1">{sections.reduce((sum, sec) => sum + sec.current, 0)}</span> Students Enlisted
-                            </Badge>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {sections.map(sec => {
-                                const pct = Math.round((sec.current / sec.capacity) * 100);
-                                const isFull = sec.current >= sec.capacity;
-                                const bar = pct >= 90 ? "from-rose-500 to-rose-600" : pct >= 70 ? "from-amber-400 to-amber-500" : "from-blue-500 to-blue-600";
-                                const seatTone = isFull
-                                    ? "text-rose-700 bg-rose-50 border-rose-200"
-                                    : pct >= 70
-                                        ? "text-amber-700 bg-amber-50 border-amber-200"
-                                        : "text-blue-700 bg-blue-50 border-blue-200";
-                                return (
-                                    <Link key={sec.id} href={`/sections/${sec.id}`}>
-                                        <Card className="border border-slate-100 shadow-sm hover:shadow-lg transition-all bg-gradient-to-br from-white via-slate-50 to-emerald-50/60 cursor-pointer hover:-translate-y-0.5">
-                                            <CardContent className="p-5">
-                                                <div className="flex justify-between items-start mb-3">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                    {/* Live Section Status (8 cols on desktop) */}
+                    <div className="lg:col-span-8 space-y-6">
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h2 className="text-base font-extrabold text-foreground flex items-center gap-2">
+                                        <Users className="w-4 h-4 text-primary" /> Live Section Status
+                                    </h2>
+                                    <p className="text-xs text-muted-foreground font-medium">Real-time seat occupancy across all active semester sections.</p>
+                                </div>
+                                <Badge variant="outline" className="bg-card text-foreground border-2 border-border text-xs px-3 py-1 font-bold shadow-2xs">
+                                    <span className="font-black text-primary mr-1">{sections.reduce((sum, sec) => sum + sec.current, 0)}</span> Enlisted
+                                </Badge>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
+                                {sections.map(sec => {
+                                    const pct = Math.min(100, Math.round((sec.current / sec.capacity) * 100));
+                                    const isFull = sec.current >= sec.capacity;
+                                    const isAlmostFull = pct >= 80 && !isFull;
+
+                                    return (
+                                        <Link key={sec.id} href={`/sections/${sec.id}`} className="group block">
+                                            <div className="p-5 rounded-2xl border-2 border-border bg-card hover:border-primary/60 hover:shadow-md transition-all duration-150 space-y-4">
+                                                <div className="flex items-start justify-between gap-2">
                                                     <div>
-                                                        <h3 className="text-lg font-bold text-slate-900">Section {sec.name}</h3>
-                                                        <p className="text-xs text-slate-400">{(sec.semesters as any)?.name}</p>
+                                                        <h3 className="font-extrabold text-base sm:text-lg text-foreground group-hover:text-primary transition-colors tracking-tight">
+                                                            Section {sec.name}
+                                                        </h3>
+                                                        <p className="text-xs font-bold text-muted-foreground mt-0.5">
+                                                            {(sec.semesters as any)?.name || 'Active Semester'}
+                                                        </p>
                                                     </div>
-                                                    <Badge className={`rounded-full px-3 border ${seatTone}`}>
-                                                        {sec.current}/{sec.capacity}
+                                                    <Badge
+                                                        variant="outline"
+                                                        className={`text-xs font-bold px-2.5 py-1 rounded-lg border shadow-2xs shrink-0 ${
+                                                            isFull
+                                                                ? 'bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-950/70 dark:text-rose-300 dark:border-rose-700'
+                                                                : isAlmostFull
+                                                                    ? 'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950/70 dark:text-amber-300 dark:border-amber-700'
+                                                                    : 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/70 dark:text-emerald-300 dark:border-emerald-700'
+                                                        }`}
+                                                    >
+                                                        {isFull ? 'FULL' : isAlmostFull ? 'Almost Full' : 'Available'}
                                                     </Badge>
                                                 </div>
-                                                <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
-                                                    <div className={`h-full transition-all duration-500 bg-gradient-to-r ${bar}`} style={{ width: `${pct}%` }} />
+
+                                                <div className="space-y-2">
+                                                    <div className="w-full bg-muted h-2.5 rounded-full overflow-hidden p-0.5 border border-border/50">
+                                                        <div
+                                                            className={`h-full rounded-full transition-all duration-300 ${
+                                                                isFull ? 'bg-rose-500' : isAlmostFull ? 'bg-amber-500' : 'bg-primary'
+                                                            }`}
+                                                            style={{ width: `${pct}%` }}
+                                                        />
+                                                    </div>
+                                                    <div className="flex items-center justify-between text-xs font-medium pt-0.5">
+                                                        <span className="text-foreground">
+                                                            <strong className="text-sm font-black text-foreground">{sec.current}</strong>
+                                                            <span className="text-muted-foreground font-semibold">/{sec.capacity} seats filled</span>
+                                                        </span>
+                                                        <span className={`font-bold px-2.5 py-0.5 rounded-md text-xs border ${
+                                                            isFull
+                                                                ? 'bg-rose-50 text-rose-800 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800'
+                                                                : isAlmostFull
+                                                                    ? 'bg-amber-50 text-amber-900 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
+                                                                    : 'bg-emerald-50 text-emerald-900 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
+                                                        }`}>
+                                                            {sec.capacity - sec.current} {sec.capacity - sec.current === 1 ? 'seat' : 'seats'} left
+                                                        </span>
+                                                    </div>
                                                 </div>
-                                                <div className="flex items-center justify-between mt-2 text-xs">
-                                                    <span className="text-slate-500">{isFull ? "Section Full" : `${sec.capacity - sec.current} seats remaining`}</span>
-                                                    <span className={`px-2 py-0.5 rounded-full border ${seatTone}`}>{pct}% filled</span>
-                                                </div>
-                                            </CardContent>
-                                        </Card>
-                                    </Link>
-                                );
-                            })}
+                                            </div>
+                                        </Link>
+                                    );
+                                })}
+                            </div>
                         </div>
 
-                        {/* Advisor List */}
-                        <h2 id="advisors" className="text-xl font-bold text-slate-800 flex items-center gap-2 pt-4">
-                            <GraduationCap className="w-5 h-5 text-blue-600" /> Advisors
-                        </h2>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            {sortedAdvisors.map(a => (
-                                <Card key={a.id} className="border-none shadow-sm bg-white">
-                                    <CardContent className="p-4">
-                                        <p className="font-semibold text-slate-800">{a.name}</p>
-                                        <p className="text-xs text-slate-500">{a.designation || 'Advisor'}</p>
-                                        <p className="text-xs text-blue-600 mt-1">📧 {a.email}</p>
-                                        {a.phone && <p className="text-xs text-slate-500 mt-0.5">📞 {a.phone}</p>}
-                                        <div className="flex flex-wrap gap-1 mt-2">
+                        {/* Faculty Advisors Directory */}
+                        <div id="advisors" className="space-y-3 pt-4 border-t border-border/70">
+                            <div>
+                                <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+                                    <GraduationCap className="w-4 h-4 text-primary" /> Faculty Advisors
+                                </h2>
+                                <p className="text-xs text-muted-foreground">Assigned academic advisors per student ID ranges.</p>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {sortedAdvisors.map(a => (
+                                    <div key={a.id} className="p-3.5 rounded-xl border border-border bg-card shadow-2xs space-y-2">
+                                        <div>
+                                            <p className="font-semibold text-xs text-foreground">{a.name}</p>
+                                            <p className="text-[11px] text-muted-foreground">{a.designation || 'Faculty Member'} {a.cabin ? `· Cabin ${a.cabin}` : ''}</p>
+                                            <p className="text-[11px] text-primary mt-0.5">{a.email}</p>
+                                        </div>
+                                        <div className="flex flex-wrap gap-1 pt-1.5 border-t border-border/60">
                                             {(a.student_advisor_ranges || [])
                                                 .slice()
                                                 .sort((r1: any, r2: any) => parseStudentIdToNumber(r1.start_id) - parseStudentIdToNumber(r2.start_id))
                                                 .map((r: any, i: number) => (
-                                                    <Badge key={i} variant="outline" className="text-[10px]">{r.start_id} – {r.end_id}</Badge>
+                                                    <Badge key={i} variant="outline" className="text-[9px] font-mono bg-muted/40 border-border text-muted-foreground">
+                                                        {r.start_id} – {r.end_id}
+                                                    </Badge>
                                                 ))}
                                         </div>
-                                    </CardContent>
-                                </Card>
-                            ))}
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     </div>
 
-                    {/* Search Results */}
-                    <div className="hidden lg:block lg:col-span-4 space-y-4">
-                        <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                            <BookOpen className="w-5 h-5 text-blue-600" /> Your Info
+                    {/* Search Results (4 cols on desktop) */}
+                    <div className="hidden lg:block lg:col-span-4 space-y-3">
+                        <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+                            <BookOpen className="w-4 h-4 text-primary" /> Search Results
                         </h2>
                         {renderResults()}
                     </div>
@@ -1018,11 +1061,12 @@ export default function StudentHub() {
             <button
                 type="button"
                 onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-                className={`fixed bottom-6 right-6 z-50 rounded-full bg-blue-600 text-white shadow-lg p-3 transition-all ${showScrollTop ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2 pointer-events-none"
-                    }`}
+                className={`fixed bottom-6 right-6 z-50 rounded-full bg-primary text-primary-foreground shadow-md p-2.5 transition-all duration-150 ${
+                    showScrollTop ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2 pointer-events-none"
+                }`}
                 aria-label="Scroll to top"
             >
-                <ArrowUp className="w-5 h-5" />
+                <ArrowUp className="w-4 h-4" />
             </button>
         </div>
     );
