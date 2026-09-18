@@ -540,38 +540,38 @@ export default function CRManagePage() {
     )
 
     return (
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+        <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
             {/* Top Bar Header */}
-            <div className="bg-card border border-border/80 rounded-2xl p-5 sm:p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="bg-card border-2 border-border rounded-2xl p-5 sm:p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-semibold uppercase tracking-wider text-primary bg-primary/10 px-2.5 py-0.5 rounded-full">
+                        <span className="text-xs font-bold uppercase tracking-wider text-primary bg-primary/10 px-2.5 py-0.5 rounded-full border border-primary/20">
                             CR Workspace
                         </span>
                         {semester?.is_locked ? (
-                            <Badge variant="destructive" className="text-xs gap-1">
+                            <Badge variant="destructive" className="text-xs gap-1 font-bold">
                                 <Lock className="h-3 w-3" /> Semester Locked
                             </Badge>
                         ) : (
-                            <Badge variant="outline" className="text-xs gap-1 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 bg-emerald-500/10">
+                            <Badge variant="outline" className="text-xs gap-1 font-bold text-emerald-600 dark:text-emerald-400 border-emerald-500/40 bg-emerald-500/10">
                                 <Check className="h-3 w-3" /> Registration Open
                             </Badge>
                         )}
                     </div>
-                    <h1 className="text-2xl font-bold tracking-tight">Class Representative Portal</h1>
-                    <p className="text-xs sm:text-sm text-muted-foreground">
+                    <h1 className="text-2xl font-black tracking-tight text-foreground">Class Representative Portal</h1>
+                    <p className="text-xs sm:text-sm text-muted-foreground font-medium">
                         Manage section registrations, student rosters, and batch imports.
                     </p>
                 </div>
 
                 <div className="flex items-center gap-2.5 self-start md:self-auto">
-                    <Badge variant="secondary" className="px-3 py-1 text-xs font-medium">
+                    <Badge variant="secondary" className="px-3 py-1 text-xs font-bold border border-border">
                         {semester ? semester.name : 'No Active Semester'}
                     </Badge>
                     <Button 
                         variant="ghost" 
                         size="sm" 
-                        className="text-xs text-muted-foreground hover:text-foreground"
+                        className="text-xs font-semibold text-muted-foreground hover:text-foreground"
                         onClick={async () => { await supabase.auth.signOut(); router.push('/auth/login') }}
                     >
                         <LogOut className="h-3.5 w-3.5 mr-1" /> Logout
@@ -581,18 +581,18 @@ export default function CRManagePage() {
 
             {/* Main Tabs Container */}
             <Tabs defaultValue="register" className="space-y-6">
-                <div className="border-b border-border/80 pb-px">
-                    <TabsList className="bg-muted/40 p-1 rounded-xl h-auto gap-1">
-                        <TabsTrigger value="register" className="text-xs sm:text-sm rounded-lg py-1.5 px-3 data-[state=active]:bg-card data-[state=active]:shadow-xs">
+                <div className="border-b-2 border-border pb-px">
+                    <TabsList className="bg-muted/40 p-1 rounded-xl h-auto gap-1 border border-border">
+                        <TabsTrigger value="register" className="text-xs sm:text-sm rounded-lg py-1.5 px-3 font-semibold data-[state=active]:bg-card data-[state=active]:shadow-xs">
                             <Plus className="h-3.5 w-3.5 mr-1.5" /> Register
                         </TabsTrigger>
-                        <TabsTrigger value="students" className="text-xs sm:text-sm rounded-lg py-1.5 px-3 data-[state=active]:bg-card data-[state=active]:shadow-xs">
+                        <TabsTrigger value="students" className="text-xs sm:text-sm rounded-lg py-1.5 px-3 font-semibold data-[state=active]:bg-card data-[state=active]:shadow-xs">
                             <Users className="h-3.5 w-3.5 mr-1.5" /> Students ({registrations.length})
                         </TabsTrigger>
-                        <TabsTrigger value="advisors" className="text-xs sm:text-sm rounded-lg py-1.5 px-3 data-[state=active]:bg-card data-[state=active]:shadow-xs">
+                        <TabsTrigger value="advisors" className="text-xs sm:text-sm rounded-lg py-1.5 px-3 font-semibold data-[state=active]:bg-card data-[state=active]:shadow-xs">
                             <BookOpen className="h-3.5 w-3.5 mr-1.5" /> Advisors
                         </TabsTrigger>
-                        <TabsTrigger value="history" className="text-xs sm:text-sm rounded-lg py-1.5 px-3 data-[state=active]:bg-card data-[state=active]:shadow-xs">
+                        <TabsTrigger value="history" className="text-xs sm:text-sm rounded-lg py-1.5 px-3 font-semibold data-[state=active]:bg-card data-[state=active]:shadow-xs">
                             <Clock className="h-3.5 w-3.5 mr-1.5" /> Audit History ({auditLogs.length})
                         </TabsTrigger>
                     </TabsList>
@@ -656,7 +656,7 @@ export default function CRManagePage() {
                                         <label className="text-xs font-medium text-muted-foreground block mb-1.5">Lab Group</label>
                                         <Select value={fLab} onValueChange={setFLab} disabled={!fSection || labGroups.length === 0}>
                                             <SelectTrigger className="h-9 text-xs">
-                                                <SelectValue placeholder={labGroups.length === 0 ? "Select section first" : "Choose lab"} />
+                                                <SelectValue placeholder={labGroups.length === 0 ? "No labs available" : "Select lab group"} />
                                             </SelectTrigger>
                                             <SelectContent>
                                                 {labGroups.map(lg => {
@@ -674,9 +674,9 @@ export default function CRManagePage() {
                                 </div>
 
                                 <div>
-                                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">Optional Note</label>
+                                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">Note (Optional)</label>
                                     <Textarea 
-                                        placeholder="Add any retake or batch notes..." 
+                                        placeholder="Add any specific context or remarks..." 
                                         value={fNote} 
                                         onChange={e => setFNote(e.target.value)} 
                                         rows={2} 
@@ -761,11 +761,11 @@ export default function CRManagePage() {
 
                 {/* ── STUDENTS TAB ─────────────────────────────────────────── */}
                 <TabsContent value="students">
-                    <div className="bg-card border border-border/80 rounded-2xl shadow-xs overflow-hidden">
-                        <div className="p-4 sm:p-5 border-b border-border/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-muted/20">
+                    <div className="bg-card border-2 border-border rounded-2xl shadow-xs overflow-hidden">
+                        <div className="p-4 sm:p-5 border-b-2 border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-muted/20">
                             <div>
-                                <h3 className="font-semibold text-sm text-foreground">Registered Students</h3>
-                                <p className="text-xs text-muted-foreground">Search and manage section assignments.</p>
+                                <h3 className="font-bold text-sm text-foreground">Registered Students</h3>
+                                <p className="text-xs text-muted-foreground font-medium">Search and manage section assignments.</p>
                             </div>
                             <div className="relative w-full sm:w-64">
                                 <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -773,65 +773,65 @@ export default function CRManagePage() {
                                     placeholder="Filter by name or ID..." 
                                     value={search} 
                                     onChange={e => setSearch(e.target.value)} 
-                                    className="pl-8 h-8 text-xs bg-background"
+                                    className="pl-8 h-8 text-xs bg-background border border-border"
                                 />
                             </div>
                         </div>
 
-                        <div className="overflow-x-auto">
-                            <Table>
+                        <div className="w-full overflow-x-auto">
+                            <Table className="w-full table-auto">
                                 <TableHeader className="bg-muted/30">
-                                    <TableRow className="text-xs">
-                                        <TableHead className="font-semibold">Student ID</TableHead>
-                                        <TableHead className="font-semibold">Name</TableHead>
-                                        <TableHead className="font-semibold">Section</TableHead>
-                                        <TableHead className="font-semibold">Lab</TableHead>
-                                        <TableHead className="font-semibold">Advisor</TableHead>
-                                        <TableHead className="font-semibold text-center">Status</TableHead>
-                                        <TableHead className="font-semibold text-right">Actions</TableHead>
+                                    <TableRow className="text-xs border-b border-border/80">
+                                        <TableHead className="w-[125px] font-bold text-foreground">Student ID</TableHead>
+                                        <TableHead className="font-bold text-foreground min-w-[150px]">Name</TableHead>
+                                        <TableHead className="w-[85px] font-bold text-foreground text-center">Section</TableHead>
+                                        <TableHead className="w-[85px] font-bold text-foreground text-center">Lab Group</TableHead>
+                                        <TableHead className="font-bold text-foreground min-w-[150px] max-w-[220px]">Advisor</TableHead>
+                                        <TableHead className="w-[70px] font-bold text-foreground text-center">Done</TableHead>
+                                        <TableHead className="w-[85px] font-bold text-foreground text-right pr-4">Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody className="divide-y divide-border/60">
                                     {filtered.map(r => (
-                                        <TableRow key={r.id} className={`text-xs hover:bg-muted/30 transition-colors ${r.advisor_completed ? 'bg-primary/5' : ''}`}>
-                                            <TableCell className="font-mono font-medium text-foreground py-3">
+                                        <TableRow key={r.id} className={`text-xs hover:bg-muted/40 transition-colors ${r.advisor_completed ? 'bg-primary/5' : ''}`}>
+                                            <TableCell className="font-mono font-bold text-foreground py-3 whitespace-nowrap">
                                                 {r.student_id}
                                             </TableCell>
-                                            <TableCell className="font-medium text-foreground">
-                                                <div>{r.student_name}</div>
-                                                {r.note && <div className="text-[10px] text-muted-foreground italic">Note: {r.note}</div>}
+                                            <TableCell className="font-medium text-foreground py-3">
+                                                <div className="font-semibold text-foreground truncate max-w-[200px] xl:max-w-[280px]">{r.student_name}</div>
+                                                {r.note && <div className="text-[10px] text-muted-foreground italic truncate max-w-[200px] xl:max-w-[280px]" title={r.note}>Note: {r.note}</div>}
                                             </TableCell>
-                                            <TableCell>
-                                                <Badge variant="outline" className="font-mono text-[11px]">
+                                            <TableCell className="py-3 text-center">
+                                                <Badge variant="outline" className="font-mono text-[10px] font-bold border-border bg-muted/40">
                                                     {r.sections?.name}
                                                 </Badge>
                                             </TableCell>
-                                            <TableCell className="text-muted-foreground">
+                                            <TableCell className="py-3 text-center text-xs">
                                                 {r.lab_groups?.name ? (
-                                                    <span className="font-medium text-foreground">{r.lab_groups.name}</span>
-                                                ) : '—'}
-                                            </TableCell>
-                                            <TableCell className="text-muted-foreground">
-                                                {r.advisors?.name || '—'}
-                                            </TableCell>
-                                            <TableCell className="text-center">
-                                                {r.advisor_completed ? (
-                                                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
-                                                        <CheckCircle2 className="h-3 w-3" /> Done
-                                                    </span>
+                                                    <span className="font-mono font-semibold text-foreground/80">{r.lab_groups.name}</span>
                                                 ) : (
-                                                    <span className="text-[10px] text-muted-foreground/60">
-                                                        Pending
-                                                    </span>
+                                                    <span className="text-muted-foreground/40 font-mono">—</span>
                                                 )}
                                             </TableCell>
-                                            <TableCell className="text-right">
-                                                <div className="flex justify-end gap-1">
-                                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => openEdit(r)} disabled={semester?.is_locked}>
-                                                        <Pencil className="h-3 w-3" />
+                                            <TableCell className="py-3 text-xs text-muted-foreground">
+                                                <span className="truncate block max-w-[180px] xl:max-w-[240px]" title={r.advisors?.name || ''}>
+                                                    {r.advisors?.name || '—'}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell className="py-3 text-center">
+                                                {r.advisor_completed ? (
+                                                    <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 mx-auto" title="Advising Completed" />
+                                                ) : (
+                                                    <Circle className="h-4 w-4 text-muted-foreground/30 mx-auto" title="Pending Advising" />
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="py-3 text-right pr-4">
+                                                <div className="flex justify-end items-center gap-1">
+                                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted" onClick={() => openEdit(r)} disabled={semester?.is_locked}>
+                                                        <Pencil className="h-3.5 w-3.5" />
                                                     </Button>
                                                     <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:bg-destructive/10" onClick={() => handleDelete(r)} disabled={semester?.is_locked}>
-                                                        <Trash2 className="h-3 w-3" />
+                                                        <Trash2 className="h-3.5 w-3.5" />
                                                     </Button>
                                                 </div>
                                             </TableCell>
