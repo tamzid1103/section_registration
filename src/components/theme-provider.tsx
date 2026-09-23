@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react"
 
-export type Theme = "light" | "dark" | "diu"
+export type Theme = "diu" | "dark"
 
 interface ThemeContextType {
     theme: Theme
@@ -15,20 +15,25 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 const THEME_STORAGE_KEY = "diu-pre-reg-theme"
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-    const [theme, setThemeState] = useState<Theme>("light")
+    const [theme, setThemeState] = useState<Theme>("diu")
     const [mounted, setMounted] = useState(false)
 
     useEffect(() => {
         // Read stored theme from localStorage on client mount
         try {
-            const savedTheme = localStorage.getItem(THEME_STORAGE_KEY) as Theme | null
-            if (savedTheme && (savedTheme === "light" || savedTheme === "dark" || savedTheme === "diu")) {
-                setThemeState(savedTheme)
-                applyThemeClass(savedTheme)
+            const savedTheme = localStorage.getItem(THEME_STORAGE_KEY) as string | null
+            if (savedTheme === "dark" || savedTheme === "diu") {
+                setThemeState(savedTheme as Theme)
+                applyThemeClass(savedTheme as Theme)
+            } else if (savedTheme === "light") {
+                // Migrate previously saved Day mode to DIU mode
+                setThemeState("diu")
+                applyThemeClass("diu")
+                localStorage.setItem(THEME_STORAGE_KEY, "diu")
             } else {
-                // Check system preference for dark mode default
+                // Check system preference for dark mode default, otherwise DIU mode
                 const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches
-                const initialTheme = prefersDark ? "dark" : "light"
+                const initialTheme: Theme = prefersDark ? "dark" : "diu"
                 setThemeState(initialTheme)
                 applyThemeClass(initialTheme)
             }
@@ -56,13 +61,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
 
     const cycleTheme = () => {
-        if (theme === "light") setTheme("dark")
-        else if (theme === "dark") setTheme("diu")
-        else setTheme("light")
+        setTheme(theme === "diu" ? "dark" : "diu")
     }
 
     return (
-        <ThemeContext.Provider value={{ theme: mounted ? theme : "light", setTheme, cycleTheme }}>
+        <ThemeContext.Provider value={{ theme: mounted ? theme : "diu", setTheme, cycleTheme }}>
             {children}
         </ThemeContext.Provider>
     )

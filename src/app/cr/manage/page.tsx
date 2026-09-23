@@ -820,9 +820,13 @@ export default function CRManagePage() {
                                             </TableCell>
                                             <TableCell className="py-3 text-center">
                                                 {r.advisor_completed ? (
-                                                    <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 mx-auto" title="Advising Completed" />
+                                                    <span title="Advising Completed" className="inline-flex justify-center w-full">
+                                                        <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                                                    </span>
                                                 ) : (
-                                                    <Circle className="h-4 w-4 text-muted-foreground/30 mx-auto" title="Pending Advising" />
+                                                    <span title="Pending Advising" className="inline-flex justify-center w-full">
+                                                        <Circle className="h-4 w-4 text-muted-foreground/30" />
+                                                    </span>
                                                 )}
                                             </TableCell>
                                             <TableCell className="py-3 text-right pr-4">

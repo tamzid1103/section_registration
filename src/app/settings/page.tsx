@@ -32,7 +32,6 @@ import {
     HelpCircle,
     Info,
     Calendar,
-    Sun,
     Moon,
     Check,
     Palette
@@ -273,37 +272,40 @@ export default function SettingsPage() {
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-                            {/* Day Mode */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                            {/* DIU Theme (Primary University Daylight Theme) */}
                             <button
                                 type="button"
-                                onClick={() => setTheme("light")}
+                                onClick={() => setTheme("diu")}
                                 className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between group ${
-                                    theme === "light"
-                                        ? "border-primary bg-primary/5 ring-2 ring-primary/20 shadow-xs"
+                                    theme === "diu"
+                                        ? "border-emerald-600 bg-emerald-500/5 ring-2 ring-emerald-500/20 shadow-xs"
                                         : "border-border/80 hover:border-border bg-card"
                                 }`}
                             >
                                 <div className="space-y-2">
                                     <div className="flex items-center justify-between">
-                                        <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-600 flex items-center justify-center">
-                                            <Sun className="w-4 h-4" />
+                                        <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                                            <GraduationCap className="w-4 h-4" />
                                         </div>
-                                        {theme === "light" && (
-                                            <span className="w-4 h-4 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
+                                        {theme === "diu" && (
+                                            <span className="w-4 h-4 rounded-full bg-emerald-600 text-white flex items-center justify-center">
                                                 <Check className="w-3 h-3 stroke-[3]" />
                                             </span>
                                         )}
                                     </div>
                                     <div>
-                                        <p className="font-semibold text-xs sm:text-sm text-foreground">Day Mode</p>
-                                        <p className="text-[11px] text-muted-foreground mt-0.5">Clean daylight soft minimalism with teal accents.</p>
+                                        <div className="flex items-center gap-1.5">
+                                            <p className="font-semibold text-xs sm:text-sm text-foreground">DIU Mode</p>
+                                            <Badge className="bg-emerald-600 text-white text-[9px] font-black px-1.5 py-0">DAY</Badge>
+                                        </div>
+                                        <p className="text-[11px] text-muted-foreground mt-0.5">Official DIU university daylight theme with Royal Navy &amp; Leaf Green.</p>
                                     </div>
                                 </div>
                                 <div className="mt-3 pt-2.5 border-t border-border/60 flex gap-1.5">
-                                    <span className="w-3.5 h-3.5 rounded-full bg-[#F9FAFB] border border-border" />
-                                    <span className="w-3.5 h-3.5 rounded-full bg-[#FFFFFF] border border-border" />
-                                    <span className="w-3.5 h-3.5 rounded-full bg-[#0F766E]" />
+                                    <span className="w-3.5 h-3.5 rounded-full bg-[#0B3B60]" />
+                                    <span className="w-3.5 h-3.5 rounded-full bg-[#008751]" />
+                                    <span className="w-3.5 h-3.5 rounded-full bg-[#D97706]" />
                                 </div>
                             </button>
 
@@ -337,42 +339,6 @@ export default function SettingsPage() {
                                     <span className="w-3.5 h-3.5 rounded-full bg-[#09090B] border border-zinc-700" />
                                     <span className="w-3.5 h-3.5 rounded-full bg-[#121215] border border-zinc-600" />
                                     <span className="w-3.5 h-3.5 rounded-full bg-[#14B8A6]" />
-                                </div>
-                            </button>
-
-                            {/* DIU Theme (Day Mode + DIU Official Colors) */}
-                            <button
-                                type="button"
-                                onClick={() => setTheme("diu")}
-                                className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between group ${
-                                    theme === "diu"
-                                        ? "border-emerald-600 bg-emerald-500/5 ring-2 ring-emerald-500/20 shadow-xs"
-                                        : "border-border/80 hover:border-border bg-card"
-                                }`}
-                            >
-                                <div className="space-y-2">
-                                    <div className="flex items-center justify-between">
-                                        <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-                                            <GraduationCap className="w-4 h-4" />
-                                        </div>
-                                        {theme === "diu" && (
-                                            <span className="w-4 h-4 rounded-full bg-emerald-600 text-white flex items-center justify-center">
-                                                <Check className="w-3 h-3 stroke-[3]" />
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div>
-                                        <div className="flex items-center gap-1.5">
-                                            <p className="font-semibold text-xs sm:text-sm text-foreground">DIU Theme</p>
-                                            <Badge className="bg-amber-500 text-slate-950 text-[9px] font-black px-1 py-0">DAY</Badge>
-                                        </div>
-                                        <p className="text-[11px] text-muted-foreground mt-0.5">Official DIU daylight vibe with Navy &amp; Leaf Green.</p>
-                                    </div>
-                                </div>
-                                <div className="mt-3 pt-2.5 border-t border-border/60 flex gap-1.5">
-                                    <span className="w-3.5 h-3.5 rounded-full bg-[#0B3B60]" />
-                                    <span className="w-3.5 h-3.5 rounded-full bg-[#059669]" />
-                                    <span className="w-3.5 h-3.5 rounded-full bg-[#D97706]" />
                                 </div>
                             </button>
                         </div>

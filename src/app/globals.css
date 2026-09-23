@@ -49,41 +49,41 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* 1. Day Mode (Modern Academic Soft Minimalism) */
-:root {
+/* 1. DIU University Mode (Default Daylight Theme) */
+:root, .diu {
   color-scheme: light;
-  --background: #F8F9FA;
-  --foreground: #18181B;
+  --background: #EEF4FA; /* Distinct soft university daylight canvas */
+  --foreground: #081E36; /* Deep navy text for superior contrast */
   --card: #FFFFFF;
-  --card-foreground: #18181B;
+  --card-foreground: #081E36;
   --popover: #FFFFFF;
-  --popover-foreground: #18181B;
-  --primary: #0F766E; /* Restrained Academic Teal */
+  --popover-foreground: #081E36;
+  --primary: #008751; /* Official DIU Leaf Emerald */
   --primary-foreground: #FFFFFF;
-  --secondary: #F1F5F9;
-  --secondary-foreground: #1E293B;
-  --muted: #F1F5F9;
-  --muted-foreground: #64748B;
-  --accent: #F1F5F9;
-  --accent-foreground: #0F172A;
+  --secondary: #E3EEF7;
+  --secondary-foreground: #08213D;
+  --muted: #E2ECF5;
+  --muted-foreground: #38516D; /* Deep slate readability */
+  --accent: #E0EDF8;
+  --accent-foreground: #08213D;
   --destructive: #E11D48;
-  --border: #CBD5E1; /* Clearly visible, crisp boundary */
-  --input: #CBD5E1;
-  --ring: #0F766E;
-  --chart-1: #0D9488;
-  --chart-2: #3B82F6;
-  --chart-3: #F59E0B;
-  --chart-4: #8B5CF6;
+  --border: #B8D0E2; /* Crisp DIU slate border */
+  --input: #B8D0E2;
+  --ring: #008751;
+  --chart-1: #008751; /* DIU Leaf Green */
+  --chart-2: #0B3B60; /* DIU Royal Navy */
+  --chart-3: #D97706; /* Daffodil Gold */
+  --chart-4: #0284C7;
   --chart-5: #64748B;
   --radius: 0.75rem;
   --sidebar: #FFFFFF;
-  --sidebar-foreground: #18181B;
-  --sidebar-primary: #0F766E;
+  --sidebar-foreground: #081E36;
+  --sidebar-primary: #008751;
   --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #F1F5F9;
-  --sidebar-accent-foreground: #0F172A;
-  --sidebar-border: #CBD5E1;
-  --sidebar-ring: #0F766E;
+  --sidebar-accent: #E8F4EC;
+  --sidebar-accent-foreground: #005A36;
+  --sidebar-border: #B8D0E2;
+  --sidebar-ring: #008751;
 }
 
 /* 2. Night Mode (Soft Minimalist Obsidian) */
@@ -120,42 +120,6 @@
   --sidebar-accent-foreground: #FAFAFA;
   --sidebar-border: #333842;
   --sidebar-ring: #14B8A6;
-}
-
-/* 3. DIU Theme (Distinct DIU Academic Vibe: Soft Cool Slate-Blue Canvas, DIU Leaf Green, DIU Royal Navy & Gold) */
-.diu {
-  color-scheme: light;
-  --background: #EEF4FA; /* Distinct soft university daylight canvas */
-  --foreground: #081E36; /* Deep navy text for superior contrast */
-  --card: #FFFFFF;
-  --card-foreground: #081E36;
-  --popover: #FFFFFF;
-  --popover-foreground: #081E36;
-  --primary: #008751; /* Official DIU Leaf Emerald */
-  --primary-foreground: #FFFFFF;
-  --secondary: #E3EEF7;
-  --secondary-foreground: #08213D;
-  --muted: #E2ECF5;
-  --muted-foreground: #38516D; /* Deep slate readability */
-  --accent: #E0EDF8;
-  --accent-foreground: #08213D;
-  --destructive: #E11D48;
-  --border: #B8D0E2; /* Crisp DIU slate border */
-  --input: #B8D0E2;
-  --ring: #008751;
-  --chart-1: #008751; /* DIU Leaf Green */
-  --chart-2: #0B3B60; /* DIU Royal Navy */
-  --chart-3: #D97706; /* Daffodil Gold */
-  --chart-4: #0284C7;
-  --chart-5: #64748B;
-  --sidebar: #FFFFFF;
-  --sidebar-foreground: #081E36;
-  --sidebar-primary: #008751;
-  --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #E8F4EC;
-  --sidebar-accent-foreground: #005A36;
-  --sidebar-border: #B8D0E2;
-  --sidebar-ring: #008751;
 }
 
 @layer base {
