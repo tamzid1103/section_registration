@@ -679,47 +679,50 @@ export default function StudentHub() {
 
     return (
         <div className="min-h-screen bg-background text-foreground transition-colors duration-150">
-            {/* Academic Navigation & Hero Header */}
-            <div className="border-b-2 border-border bg-card/95 backdrop-blur shadow-xs relative">
+            {/* Academic Navigation & Hero Header - Rich University Colored Banner */}
+            <div className="border-b-2 border-border/60 bg-gradient-to-r from-[#072448] via-[#0B3B60] to-[#014D33] dark:from-[#080E18] dark:via-[#0F1B2B] dark:to-[#081813] text-white shadow-md relative overflow-hidden">
                 {/* University Branded Color Ribbon */}
-                <div className="h-1.5 w-full bg-gradient-to-r from-[#0F766E] via-[#059669] to-[#D97706] diu:from-[#0B3B60] diu:via-[#008751] diu:to-[#D97706]" />
+                <div className="h-1.5 w-full bg-gradient-to-r from-[#008751] via-[#D97706] to-[#0B3B60]" />
 
-                <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+                {/* Subtle Ambient Decorative Glow */}
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(14,165,233,0.15),rgba(255,255,255,0))] pointer-events-none" />
+
+                <div className="relative max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
                     {/* Top Row: Brand, Clock, & Global Actions */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <div className="flex items-center gap-3.5">
-                            <div className="w-11 h-11 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center font-black text-sm tracking-wider shadow-xs ring-2 ring-primary/25 shrink-0">
+                            <div className="w-11 h-11 rounded-2xl bg-white text-[#0B3B60] dark:bg-emerald-600 dark:text-white flex items-center justify-center font-black text-sm tracking-wider shadow-md ring-2 ring-white/20 shrink-0">
                                 DIU
                             </div>
                             <div>
                                 <div className="flex items-center gap-2">
-                                    <h1 className="text-xl sm:text-2xl font-black tracking-tight text-foreground">Section Pre-Registration</h1>
-                                    <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-primary/10 text-primary border border-primary/25">
+                                    <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white">Section Pre-Registration</h1>
+                                    <span className="hidden sm:inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-white/15 text-white border border-white/25 backdrop-blur-xs">
                                         Academic Portal
                                     </span>
                                 </div>
-                                <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5 mt-0.5">
-                                    <GraduationCap className="w-3.5 h-3.5 text-primary shrink-0" /> Department of Computer Science &amp; Engineering · Daffodil International University
+                                <p className="text-xs font-semibold text-emerald-100/90 dark:text-slate-300 flex items-center gap-1.5 mt-0.5">
+                                    <GraduationCap className="w-3.5 h-3.5 text-emerald-300 shrink-0" /> Department of Computer Science &amp; Engineering · Daffodil International University
                                 </p>
                             </div>
                         </div>
 
                         <div className="flex items-center gap-2.5 flex-wrap">
                             {/* Live Timer Pill */}
-                            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border-2 border-border bg-muted/40 text-xs text-muted-foreground shadow-2xs">
-                                <Clock3 className="w-3.5 h-3.5 text-primary shrink-0" />
-                                <span className="font-mono font-bold text-foreground">{mounted ? timerDisplay.value : '—:—:—'}</span>
-                                <span className="text-[10px] uppercase font-black tracking-wider px-1.5 py-0.2 rounded bg-background border border-border text-foreground">{timerDisplay.chip}</span>
+                            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border border-white/20 bg-black/25 backdrop-blur-sm text-xs text-white/95 shadow-2xs">
+                                <Clock3 className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
+                                <span className="font-mono font-bold text-white">{mounted ? timerDisplay.value : '—:—:—'}</span>
+                                <span className="text-[10px] uppercase font-black tracking-wider px-1.5 py-0.2 rounded bg-white/20 border border-white/25 text-white">{timerDisplay.chip}</span>
                             </div>
 
-                            <ThemeToggle variant="pills" />
+                            <ThemeToggle variant="header" />
 
                             {userRole ? (
                                 <Link
                                     href={dashboardUrl}
-                                    className="inline-flex items-center gap-1.5 bg-primary text-primary-foreground font-bold text-xs rounded-xl px-4 py-2 hover:bg-primary/90 transition-all shadow-xs"
+                                    className="inline-flex items-center gap-1.5 bg-white text-[#0B3B60] hover:bg-slate-100 font-extrabold text-xs rounded-xl px-4 py-2 hover:shadow-lg transition-all shadow-md"
                                 >
-                                    <LayoutDashboard className="w-3.5 h-3.5" /> Portal Dashboard
+                                    <LayoutDashboard className="w-3.5 h-3.5 text-[#008751]" /> Portal Dashboard
                                 </Link>
                             ) : (
                                 <Dialog open={authOpen} onOpenChange={setAuthOpen}>
@@ -727,9 +730,9 @@ export default function StudentHub() {
                                         <button
                                             type="button"
                                             onClick={() => setAuthMode("login")}
-                                            className="inline-flex items-center gap-1.5 text-foreground hover:text-primary text-xs font-bold border-2 border-border bg-card hover:bg-muted rounded-xl px-4 py-2 transition-all shadow-xs"
+                                            className="inline-flex items-center gap-1.5 text-white hover:text-white text-xs font-extrabold border border-white/30 bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-xl px-4 py-2 transition-all shadow-sm"
                                         >
-                                            <LogIn className="w-3.5 h-3.5" /> Portal Login
+                                            <LogIn className="w-3.5 h-3.5 text-emerald-300" /> Portal Login
                                         </button>
                                     </DialogTrigger>
                                     <DialogContent className="w-[calc(100%-1.5rem)] sm:max-w-md rounded-2xl p-6 border-border shadow-md">
@@ -894,19 +897,19 @@ export default function StudentHub() {
                     </div>
 
                     {/* Masthead Banner info */}
-                    <div className="pt-4 border-t border-border/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                        <div className="flex items-center gap-2 text-muted-foreground flex-wrap">
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-md font-extrabold text-[11px] bg-primary/10 text-primary border border-primary/25">
+                    <div className="pt-4 border-t border-white/15 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                        <div className="flex items-center gap-2 text-emerald-100/90 dark:text-slate-300 flex-wrap">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-md font-extrabold text-[11px] bg-white/15 text-white border border-white/25">
                                 Live Pre-Registration
                             </span>
-                            <span className="hidden sm:inline text-muted-foreground/60">·</span>
-                            <span className="text-xs font-semibold text-foreground">
+                            <span className="hidden sm:inline text-white/50">·</span>
+                            <span className="text-xs font-medium text-white/95">
                                 Real-time cohort capacity, lab choices &amp; assigned faculty advising.
                             </span>
                         </div>
-                        <div className="flex items-center gap-3 text-xs font-bold text-muted-foreground shrink-0">
-                            <span className="flex items-center gap-1.5 text-foreground">
-                                <Users className="w-3.5 h-3.5 text-primary" /> Active Cohorts: <span className="text-primary font-black">{sections.length}</span>
+                        <div className="flex items-center gap-3 text-xs font-bold text-white/90 shrink-0">
+                            <span className="flex items-center gap-1.5 text-white">
+                                <Users className="w-3.5 h-3.5 text-emerald-300" /> Active Cohorts: <span className="text-emerald-300 font-black">{sections.length}</span>
                             </span>
                         </div>
                     </div>
