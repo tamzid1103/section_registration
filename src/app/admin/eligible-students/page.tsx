@@ -8,16 +8,20 @@ import { Badge } from '@/components/ui/badge'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
-import { UserPlus, Trash2, ArrowLeft, Plus, Upload, Download, Search, Pencil, Users, Sparkles, Check } from 'lucide-react'
+import { UserPlus, Trash2, ArrowLeft, Plus, Upload, Download, Search, Pencil, Users, Sparkles, Check, Eye } from 'lucide-react'
 import { toast } from 'sonner'
 import { getFriendlyErrorMessage } from '@/lib/utils'
+import { useRouter } from 'next/navigation'
+import { startImpersonation } from '@/lib/impersonation'
 import Link from 'next/link'
 
 export default function AdminEligibleStudentsPage() {
     const supabase = createClient()
+    const router = useRouter()
     const csvRef = useRef<HTMLInputElement>(null)
 
     const [students, setStudents] = useState<any[]>([])
+    const [adminEmail, setAdminEmail] = useState('')
     const [search, setSearch] = useState('')
     const [loading, setLoading] = useState(false)
 
@@ -44,6 +48,9 @@ export default function AdminEligibleStudentsPage() {
 
     async function fetchStudents() {
         setLoading(true)
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user?.email) setAdminEmail(user.email)
+
         const { data, error } = await supabase
             .from('allowed_students')
             .select('*')
@@ -54,6 +61,19 @@ export default function AdminEligibleStudentsPage() {
             setStudents(data || [])
         }
         setLoading(false)
+    }
+
+    const handleImpersonateStudent = (s: any) => {
+        startImpersonation({
+            role: 'student',
+            email: s.email || `${s.student_id}@diu.edu.bd`,
+            name: s.name,
+            studentId: s.student_id,
+            originalAdminEmail: adminEmail || 'admin@diu.edu.bd',
+            impersonatedAt: new Date().toISOString()
+        })
+        toast.success(`Impersonating Student ${s.name} (${s.student_id})`)
+        router.push('/student/dashboard')
     }
 
     const filteredStudents = students.filter(s =>
@@ -529,6 +549,9 @@ export default function AdminEligibleStudentsPage() {
                                             <TableCell className="font-mono text-muted-foreground">{s.email}</TableCell>
                                             <TableCell className="text-right">
                                                 <div className="flex justify-end gap-1">
+                                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-primary hover:bg-primary/10" title="Impersonate Student" onClick={() => handleImpersonateStudent(s)}>
+                                                        <Eye className="h-3.5 w-3.5" />
+                                                    </Button>
                                                     <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => openEdit(s)}>
                                                         <Pencil className="h-3 w-3" />
                                                     </Button>

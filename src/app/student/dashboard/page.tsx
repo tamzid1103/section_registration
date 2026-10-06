@@ -29,6 +29,7 @@ import { useRouter } from 'next/navigation'
 import { invalidateCacheScopes } from '@/lib/cache/client'
 import { getFriendlyErrorMessage } from '@/lib/utils'
 import { findAdvisorForStudent } from '@/lib/advisor-assignment'
+import { getImpersonationSession } from '@/lib/impersonation'
 
 export default function StudentDashboard() {
     const supabase = createClient()
@@ -58,8 +59,14 @@ export default function StudentDashboard() {
             })
             .subscribe()
 
+        const onImpersonationChange = () => {
+            init()
+        }
+        window.addEventListener('diu:impersonation-change', onImpersonationChange)
+
         return () => {
             supabase.removeChannel(regCh)
+            window.removeEventListener('diu:impersonation-change', onImpersonationChange)
         }
     }, [])
 
@@ -72,34 +79,59 @@ export default function StudentDashboard() {
         }
         setUser(currentUser)
 
-        // Fetch pre-authorized student info
-        const { data: allowed } = await supabase
-            .from('allowed_students')
-            .select('*')
-            .eq('email', currentUser.email)
-            .maybeSingle()
+        const impersonation = getImpersonationSession()
+        const isImpersonatingStudent = impersonation && impersonation.role === 'student'
+        const effectiveEmail = isImpersonatingStudent ? impersonation.email : currentUser.email
 
-        let resolvedAllowed = allowed
-        if (!resolvedAllowed) {
-            const domain = (currentUser.email || '').split('@')[1] || ''
-            const isEduDomain = domain === 'diu.edu.bd' || domain === 'daffodilvarsity.edu.bd'
-            if (!isEduDomain) {
-                toast.error('You are not authorized to access the student portal.')
-                router.push('/')
-                return
-            }
-            const { data: staffRec } = await supabase
-                .from('authorized_staff')
-                .select('name')
-                .eq('email', currentUser.email)
+        // Fetch pre-authorized student info
+        let resolvedAllowed: any = null
+        if (isImpersonatingStudent && impersonation.studentId) {
+            const { data: allowedById } = await supabase
+                .from('allowed_students')
+                .select('*')
+                .eq('student_id', impersonation.studentId)
                 .maybeSingle()
-            const metaStudentId = currentUser.user_metadata?.student_id || ''
-            const metaName = staffRec?.name || currentUser.user_metadata?.full_name || currentUser.email
-            resolvedAllowed = {
-                id: null,
-                email: currentUser.email,
-                student_id: metaStudentId,
-                name: metaName,
+            resolvedAllowed = allowedById
+        }
+
+        if (!resolvedAllowed) {
+            const { data: allowed } = await supabase
+                .from('allowed_students')
+                .select('*')
+                .eq('email', effectiveEmail)
+                .maybeSingle()
+            resolvedAllowed = allowed
+        }
+
+        if (!resolvedAllowed) {
+            if (isImpersonatingStudent) {
+                resolvedAllowed = {
+                    id: null,
+                    email: impersonation.email,
+                    student_id: impersonation.studentId || '',
+                    name: impersonation.name || 'Student',
+                }
+            } else {
+                const domain = (currentUser.email || '').split('@')[1] || ''
+                const isEduDomain = domain === 'diu.edu.bd' || domain === 'daffodilvarsity.edu.bd'
+                if (!isEduDomain) {
+                    toast.error('You are not authorized to access the student portal.')
+                    router.push('/')
+                    return
+                }
+                const { data: staffRec } = await supabase
+                    .from('authorized_staff')
+                    .select('name')
+                    .eq('email', currentUser.email)
+                    .maybeSingle()
+                const metaStudentId = currentUser.user_metadata?.student_id || ''
+                const metaName = staffRec?.name || currentUser.user_metadata?.full_name || currentUser.email
+                resolvedAllowed = {
+                    id: null,
+                    email: currentUser.email,
+                    student_id: metaStudentId,
+                    name: metaName,
+                }
             }
         }
         setAllowedInfo(resolvedAllowed)

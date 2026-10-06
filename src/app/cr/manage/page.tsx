@@ -19,6 +19,7 @@ import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { invalidateCacheScopes } from '@/lib/cache/client'
 import { getFriendlyErrorMessage } from '@/lib/utils'
+import { getImpersonationSession } from '@/lib/impersonation'
 
 export default function CRManagePage() {
     const supabase = createClient()
@@ -83,9 +84,15 @@ export default function CRManagePage() {
             .on('postgres_changes', { event: '*', schema: 'public', table: 'semesters' }, () => fetchActiveSemester())
             .subscribe()
 
+        const onImpersonationChange = () => {
+            init()
+        }
+        window.addEventListener('diu:impersonation-change', onImpersonationChange)
+
         return () => {
             supabase.removeChannel(regCh)
             supabase.removeChannel(semCh)
+            window.removeEventListener('diu:impersonation-change', onImpersonationChange)
         }
     }, [])
 
@@ -98,8 +105,10 @@ export default function CRManagePage() {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return
 
-        const { data: staff } = await supabase.from('authorized_staff').select('*').eq('email', user.email).single()
-        setCrInfo(staff)
+        const impersonation = getImpersonationSession()
+        const effectiveEmail = (impersonation && impersonation.role === 'cr') ? impersonation.email : user.email
+        const { data: staff } = await supabase.from('authorized_staff').select('*').eq('email', effectiveEmail).maybeSingle()
+        setCrInfo(staff || (impersonation?.role === 'cr' ? { id: user.id, email: impersonation.email, name: impersonation.name, role: 'cr' } : null))
 
         const sem = await fetchActiveSemester()
         await fetchAdvisors()

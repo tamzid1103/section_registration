@@ -9,12 +9,16 @@ import { Badge } from '@/components/ui/badge'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
-import { UserPlus, Trash2, ArrowLeft, Plus, Upload, Download, FileText, Pencil, GraduationCap, Layers } from 'lucide-react'
+import { UserPlus, Trash2, ArrowLeft, Plus, Upload, Download, FileText, Pencil, GraduationCap, Layers, Eye } from 'lucide-react'
 import { toast } from 'sonner'
 import { getFriendlyErrorMessage } from '@/lib/utils'
+import { useRouter } from 'next/navigation'
+import { startImpersonation } from '@/lib/impersonation'
 import Link from 'next/link'
 
 export default function AdminAdvisorsPage() {
+    const router = useRouter()
+    const [adminEmail, setAdminEmail] = useState('')
     const [advisors, setAdvisors] = useState<any[]>([])
     const [semesters, setSemesters] = useState<any[]>([])
     const [ranges, setRanges] = useState<any[]>([])
@@ -52,6 +56,9 @@ export default function AdminAdvisorsPage() {
     }, [])
 
     async function fetchAll() {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user?.email) setAdminEmail(user.email)
+
         const [{ data: adv }, { data: sem }, { data: rng }] = await Promise.all([
             supabase.from('advisors').select('*').order('name'),
             supabase.from('semesters').select('*').order('created_at', { ascending: false }),
@@ -60,6 +67,19 @@ export default function AdminAdvisorsPage() {
         if (adv) setAdvisors(adv)
         if (sem) setSemesters(sem)
         if (rng) setRanges(rng)
+    }
+
+    const handleImpersonateAdvisor = (adv: any) => {
+        startImpersonation({
+            role: 'advisor',
+            email: adv.email,
+            name: adv.name,
+            advisorId: adv.id,
+            originalAdminEmail: adminEmail || 'admin@diu.edu.bd',
+            impersonatedAt: new Date().toISOString()
+        })
+        toast.success(`Impersonating Advisor ${adv.name}`)
+        router.push('/advisor')
     }
 
     async function handleAddAdvisor(e: React.FormEvent) {
@@ -609,6 +629,9 @@ export default function AdminAdvisorsPage() {
                                     <TableCell className="text-muted-foreground">{a.designation || '—'}</TableCell>
                                     <TableCell className="text-right">
                                         <div className="flex justify-end gap-1">
+                                            <Button size="icon" variant="ghost" className="h-7 w-7 text-primary hover:bg-primary/10" title="Impersonate Advisor" onClick={() => handleImpersonateAdvisor(a)}>
+                                                <Eye className="h-3.5 w-3.5" />
+                                            </Button>
                                             <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => openEdit(a)}>
                                                 <Pencil className="h-3 w-3" />
                                             </Button>

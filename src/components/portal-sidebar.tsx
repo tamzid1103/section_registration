@@ -20,11 +20,16 @@ import {
     Bell,
     CheckCircle2,
     Code,
-    Sparkles
+    Sparkles,
+    UserCheck,
+    ArrowLeft,
+    Eye
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { getImpersonationSession, stopImpersonation } from "@/lib/impersonation"
+import { ImpersonationBanner } from "@/components/impersonation-banner"
 
 type NavItem = {
     href: string
@@ -43,6 +48,7 @@ export function PortalSidebar({ children }: { children: React.ReactNode }) {
     const [pendingCount, setPendingCount] = useState(0)
     const [mobileOpen, setMobileOpen] = useState(false)
     const [loaded, setLoaded] = useState(false)
+    const [isImpersonating, setIsImpersonating] = useState(false)
 
     const isPortalRoute =
         pathname.startsWith('/admin') ||
@@ -67,12 +73,29 @@ export function PortalSidebar({ children }: { children: React.ReactNode }) {
 
         setUserEmail(user.email)
 
-        // 1. Check authorized_staff first
+        // 1. Check authorized_staff first to know the real user's role
         const { data: staffData } = await supabase
             .from('authorized_staff')
             .select('role, name')
             .eq('email', user.email)
             .maybeSingle()
+
+        // 2. Check for active impersonation (permitted only if real user is admin or developer)
+        const impersonation = getImpersonationSession()
+        const isRealAdmin = staffData && ['admin', 'developer'].includes(staffData.role)
+
+        if (impersonation && isRealAdmin) {
+            setRole(impersonation.role)
+            setStaffName(impersonation.name)
+            setUserEmail(impersonation.email)
+            setCrSection(impersonation.section || null)
+            setIsImpersonating(true)
+            setLoaded(true)
+            return
+        } else if (impersonation && !isRealAdmin) {
+            stopImpersonation()
+        }
+        setIsImpersonating(false)
 
         if (staffData) {
             setRole(staffData.role)
@@ -129,6 +152,14 @@ export function PortalSidebar({ children }: { children: React.ReactNode }) {
 
     useEffect(() => {
         fetchUserAndRole()
+
+        const handleImpersonationChange = () => {
+            fetchUserAndRole()
+        }
+        window.addEventListener('diu:impersonation-change', handleImpersonationChange)
+        return () => {
+            window.removeEventListener('diu:impersonation-change', handleImpersonationChange)
+        }
     }, [fetchUserAndRole])
 
     useEffect(() => {
@@ -169,6 +200,36 @@ export function PortalSidebar({ children }: { children: React.ReactNode }) {
     }
 
     const getNavLinks = (): NavItem[] => {
+        if (isImpersonating) {
+            const baseLinks: NavItem[] = []
+            switch (role) {
+                case 'cr':
+                    baseLinks.push(
+                        { href: '/cr/manage', label: 'CR Portal', icon: Users },
+                        { href: '/', label: 'Live Public View', icon: Home },
+                        { href: '/settings', label: 'Settings', icon: Settings },
+                    )
+                    break
+                case 'advisor':
+                    baseLinks.push(
+                        { href: '/advisor', label: 'My Students', icon: GraduationCap },
+                        { href: '/', label: 'Live Public View', icon: Home },
+                        { href: '/settings', label: 'Settings', icon: Settings },
+                    )
+                    break
+                case 'student':
+                default:
+                    baseLinks.push(
+                        { href: '/student/dashboard', label: 'My Pre-Registration', icon: CheckCircle2 },
+                        { href: '/', label: 'Live Public View', icon: Home },
+                        { href: '/settings', label: 'Settings', icon: Settings },
+                    )
+                    break
+            }
+            baseLinks.push({ href: '/admin/impersonate', label: 'Exit to Admin Console', icon: ArrowLeft })
+            return baseLinks
+        }
+
         switch (role) {
             case 'admin':
                 return [
@@ -179,12 +240,14 @@ export function PortalSidebar({ children }: { children: React.ReactNode }) {
                     { href: '/admin/eligible-students', label: 'Eligible Students', icon: Users },
                     { href: '/admin/courses', label: 'Offered Courses', icon: BookOpen },
                     { href: '/admin/users', label: 'Users & CR Approvals', icon: ShieldAlert, badge: pendingCount > 0 ? pendingCount : undefined },
+                    { href: '/admin/impersonate', label: 'Impersonate User', icon: UserCheck },
                     { href: '/settings', label: 'Settings', icon: Settings },
                 ]
             case 'developer':
                 return [
                     { href: '/developer', label: 'Dev Console', icon: Code },
                     { href: '/admin', label: 'Admin Dashboard', icon: LayoutDashboard },
+                    { href: '/admin/impersonate', label: 'Impersonate User', icon: UserCheck },
                     { href: '/admin/users', label: 'Users & CR Approvals', icon: ShieldAlert, badge: pendingCount > 0 ? pendingCount : undefined },
                     { href: '/settings', label: 'Settings', icon: Settings },
                 ]
@@ -297,10 +360,17 @@ export function PortalSidebar({ children }: { children: React.ReactNode }) {
                     </div>
 
                     <div className="flex items-center justify-between pt-1.5 border-t border-border/60">
-                        <Badge variant="outline" className={`text-[9px] font-mono uppercase font-semibold px-1.5 py-0.2 ${roleBadgeColors[role] || ''}`}>
-                            {role}
-                            {crSection ? ` (Sec ${crSection})` : ''}
-                        </Badge>
+                        <div className="flex items-center gap-1 flex-wrap">
+                            <Badge variant="outline" className={`text-[9px] font-mono uppercase font-semibold px-1.5 py-0.2 ${roleBadgeColors[role] || ''}`}>
+                                {role}
+                                {crSection ? ` (Sec ${crSection})` : ''}
+                            </Badge>
+                            {isImpersonating && (
+                                <Badge className="bg-amber-600 text-white font-black text-[8px] px-1 py-0 uppercase">
+                                    Impersonating
+                                </Badge>
+                            )}
+                        </div>
                         <Link
                             href="/settings"
                             title="Account Settings"
@@ -383,6 +453,7 @@ export function PortalSidebar({ children }: { children: React.ReactNode }) {
 
             {/* Main Content Area */}
             <div className="flex-1 md:pl-60 flex flex-col min-w-0">
+                <ImpersonationBanner />
                 <main className="flex-1">
                     {children}
                 </main>

@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { getFriendlyErrorMessage } from "@/lib/utils";
 import { parseStudentIdNumeric } from "@/lib/advisor-assignment";
 import { useRouter } from "next/navigation";
+import { getImpersonationSession } from "@/lib/impersonation";
 
 interface Student {
     id: string;
@@ -68,6 +69,14 @@ export default function AdvisorDashboard() {
     useEffect(() => {
         initAdvisorPortal();
         fetchCRs();
+
+        const handleImpersonationChange = () => {
+            initAdvisorPortal();
+        };
+        window.addEventListener('diu:impersonation-change', handleImpersonationChange);
+        return () => {
+            window.removeEventListener('diu:impersonation-change', handleImpersonationChange);
+        };
     }, []);
 
     async function fetchCRs() {
@@ -83,10 +92,15 @@ export default function AdvisorDashboard() {
             return;
         }
 
+        const impersonation = getImpersonationSession();
+        const effectiveEmail = (impersonation && impersonation.role === 'advisor')
+            ? impersonation.email
+            : user.email;
+
         const { data: advisorData } = await supabase
             .from("advisors")
             .select(`id, name, student_advisor_ranges(start_id, end_id)`)
-            .eq("email", user.email)
+            .eq("email", effectiveEmail)
             .single();
 
         if (!advisorData) {

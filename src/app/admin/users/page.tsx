@@ -5,14 +5,18 @@ import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
-import { Check, X, ShieldCheck, Mail, ArrowUpRight, Trash2, UserMinus, ArrowLeft, Users, Bell } from 'lucide-react'
+import { Check, X, ShieldCheck, Mail, ArrowUpRight, Trash2, UserMinus, ArrowLeft, Users, Bell, Eye } from 'lucide-react'
 import { toast } from 'sonner'
 import { getFriendlyErrorMessage } from '@/lib/utils'
+import { useRouter } from 'next/navigation'
+import { startImpersonation } from '@/lib/impersonation'
 import Link from 'next/link'
 
 export default function AdminUsers() {
     const [applications, setApplications] = useState<any[]>([])
     const [staff, setStaff] = useState<any[]>([])
+    const [adminEmail, setAdminEmail] = useState<string>('')
+    const router = useRouter()
     const supabase = createClient()
 
     useEffect(() => {
@@ -20,6 +24,9 @@ export default function AdminUsers() {
     }, [])
 
     async function fetchData() {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user?.email) setAdminEmail(user.email)
+
         const { data: apps } = await supabase.from('cr_applications').select('*').eq('status', 'pending')
         const { data: s } = await supabase.from('authorized_staff').select('*').order('role', { ascending: true })
         if (apps) setApplications(apps)
@@ -35,6 +42,19 @@ export default function AdminUsers() {
             )
             setStaff(staffWithSections)
         }
+    }
+
+    const handleImpersonateCR = (s: any) => {
+        startImpersonation({
+            role: 'cr',
+            email: s.email,
+            name: s.name || s.email,
+            section: s.section_interested !== 'N/A' ? s.section_interested : null,
+            originalAdminEmail: adminEmail || 'admin@diu.edu.bd',
+            impersonatedAt: new Date().toISOString()
+        })
+        toast.success(`Impersonating CR ${s.name || s.email}`)
+        router.push('/cr/manage')
     }
 
     async function handleApprove(app: any) {
@@ -234,6 +254,9 @@ export default function AdminUsers() {
                                         <TableCell className="text-right">
                                             {s.role === 'cr' ? (
                                                 <div className="flex gap-1 justify-end">
+                                                    <Button size="sm" variant="ghost" onClick={() => handleImpersonateCR(s)} className="h-7 text-[11px] text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 px-2" title="Impersonate CR">
+                                                        <Eye className="h-3 w-3 mr-0.5" /> Impersonate
+                                                    </Button>
                                                     <Button size="sm" variant="ghost" onClick={() => handlePromoteToAdmin(s.id)} className="h-7 text-[11px] text-primary hover:bg-primary/10 px-2">
                                                         <ArrowUpRight className="h-3 w-3 mr-0.5" /> Admin
                                                     </Button>
